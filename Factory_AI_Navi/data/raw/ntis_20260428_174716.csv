@@ -1,0 +1,4 @@
+﻿subsidy_id,source,program_name,program_category,target_industry_codes,target_company_sizes,target_ai_types,max_support_amount,min_support_amount,co_funding_rate,application_start,application_end,announcement_date,apply_url,description,requirements,is_active
+NTIS-2026-M001,NTIS,제조공정 AI 비전검사 기술 개발,R&D,"C25,C22","small,medium",vision_inspection,25000,5000,0.4,2026-04-21,2026-07-27,2026-04-21,https://www.ntis.go.kr,금속·사출 공정 AI 비전검사 시스템 개발 R&D,중소기업 기술개발 역량 보유,True
+NTIS-2026-M002,NTIS,식품제조 스마트 품질관리 AI 플랫폼,R&D,C10,"small,medium",quality_control,15000,3000,0.45,2026-04-14,2026-07-13,2026-04-14,https://www.ntis.go.kr,식품 제조 HACCP 연계 AI 실시간 품질 모니터링,식품제조 허가 보유 기업,True
+NTIS-2026-M003,NTIS,산업용 IoT·AI 융합 예측유지보수 기술,R&D,"C25,C24,C29","medium,mid_large",predictive_maintenance,40000,10000,0.35,2026-04-25,2026-08-26,2026-04-25,https://www.ntis.go.kr,IoT 센서 + AI 기반 설비 고장 예측 시스템 R&D,"기업부설연구소 보유, 제조업 영위",True

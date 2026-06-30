@@ -1,0 +1,160 @@
+# Factory AI Navi — Docker Compose
+# Airflow 스케줄러 + 웹서버 + Airflow 메타 DB (PostgreSQL)
+# 프로젝트 데이터 DB는 AWS RDS 사용 (이 파일에 없음)
+#
+# ──────────────────────────────────────────────────────────────────────────────
+# 사용 방법:
+#   1. .env.example → .env 복사 후 RDS 정보 입력
+#   2. docker-compose up -d
+#   3. http://localhost:8080 → Airflow UI (admin/admin)
+#   4. Airflow UI에서 DAG 활성화:
+#        - factory_ai_navi_weekly_etl       (매주 월요일 02:00)
+#        - factory_ai_navi_daily_subsidy    (매일 23:00)
+#        - factory_ai_navi_monthly_cleanup  (매월 1일 03:00)
+# ──────────────────────────────────────────────────────────────────────────────
+
+version: '3.8'
+
+# ── 공통 환경변수 앵커 ──────────────────────────────────────────────────────
+x-airflow-env: &airflow-env
+  AIRFLOW__CORE__EXECUTOR: LocalExecutor
+  AIRFLOW__CORE__FERNET_KEY: ''        # 실제 운영 시 fernet key 생성 필요
+  AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'true'
+  AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
+  AIRFLOW__WEBSERVER__SECRET_KEY: 'factory_ai_navi_secret'
+  # ── Airflow 메타 DB: 로컬 PostgreSQL 컨테이너 ──
+  AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@airflow-db:5432/airflow
+  # ── 프로젝트 데이터 DB: AWS RDS (별도) ──
+  # (USE_MOCK_DATA=true 이면 RDS 없이 SQLite로 폴백됩니다)
+  USE_MOCK_DATA:    ${USE_MOCK_DATA:-true}
+  RDS_HOST:         ${RDS_HOST:-PLACEHOLDER}
+  RDS_PORT:         ${RDS_PORT:-5432}
+  RDS_DB:           ${RDS_DB:-factory_ai_navi}
+  RDS_USER:         ${RDS_USER:-PLACEHOLDER}
+  RDS_PASSWORD:     ${RDS_PASSWORD:-PLACEHOLDER}
+  NTIS_API_KEY:     ${NTIS_API_KEY:-PLACEHOLDER}
+  KSNPC_API_KEY:    ${KSNPC_API_KEY:-PLACEHOLDER}
+  OPENAI_API_KEY:   ${OPENAI_API_KEY:-PLACEHOLDER}
+  ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-PLACEHOLDER}
+  LOG_LEVEL:        ${LOG_LEVEL:-INFO}
+
+# ── 공통 볼륨 마운트 앵커 ─────────────────────────────────────────────────
+x-airflow-volumes: &airflow-volumes
+  - ./layer1_etl:/opt/airflow/dags/layer1_etl
+  - ./layer1_etl/dags:/opt/airflow/dags
+  - ./data:/opt/airflow/data          # raw/processed CSV + Excel 파일
+  - ./logs:/opt/airflow/project_logs  # 프로젝트 애플리케이션 로그
+  - airflow_logs:/opt/airflow/logs    # Airflow 태스크 실행 로그
+
+services:
+
+  # ── Airflow 메타 DB (로컬 PostgreSQL) ─────────────────────────────────────
+  airflow-db:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER:     airflow
+      POSTGRES_PASSWORD: airflow
+      POSTGRES_DB:       airflow
+    volumes:
+      - airflow_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U airflow"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Airflow 초기화 (최초 1회) ─────────────────────────────────────────────
+  airflow-init:
+    image: apache/airflow:2.9.1-python3.11
+    entrypoint: /bin/bash
+    command: >
+      -c "pip install -r /requirements.txt --quiet &&
+          airflow db migrate &&
+          airflow users create
+            --username admin
+            --firstname Admin
+            --lastname User
+            --role Admin
+            --email admin@factory-ai-navi.com
+            --password admin"
+    environment:
+      <<: *airflow-env
+    volumes:
+      - *airflow-volumes
+      - ./requirements.txt:/requirements.txt
+    env_file:
+      - .env
+    depends_on:
+      airflow-db:
+        condition: service_healthy
+
+  # ── Airflow 스케줄러 ───────────────────────────────────────────────────────
+  airflow-scheduler:
+    image: apache/airflow:2.9.1-python3.11
+    restart: unless-stopped
+    depends_on:
+      airflow-init:
+        condition: service_completed_successfully
+    environment:
+      <<: *airflow-env
+    volumes:
+      - *airflow-volumes
+      - ./requirements.txt:/requirements.txt
+    env_file:
+      - .env
+    user: "50000:0"
+    entrypoint: /bin/bash
+    command: >
+      -c "pip install -r /requirements.txt --quiet &&
+          airflow scheduler"
+    healthcheck:
+      test: ["CMD-SHELL", "airflow jobs check --job-type SchedulerJob --hostname $(hostname)"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # ── Airflow 웹서버 (모니터링 UI) ──────────────────────────────────────────
+  airflow-webserver:
+    image: apache/airflow:2.9.1-python3.11
+    command: webserver
+    restart: unless-stopped
+    depends_on:
+      airflow-init:
+        condition: service_completed_successfully
+    ports:
+      - "8080:8080"
+    environment:
+      <<: *airflow-env
+    volumes:
+      - *airflow-volumes
+    env_file:
+      - .env
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+volumes:
+  airflow_db_data:
+    driver: local      # Airflow 메타 DB 영구 저장
+  airflow_logs:
+    driver: local      # Airflow 태스크 실행 로그
+
+# ──────────────────────────────────────────────────────────────────────────────
+# [참고] GCP Cloud SQL PostgreSQL 인스턴스 생성 후 체크리스트:
+#
+# 1. GCP Console → SQL → 인스턴스 만들기 → PostgreSQL 15
+#    (머신 타입: db-f1-micro, 스토리지: 10GB SSD)
+# 2. 연결 → 네트워킹 → 승인된 네트워크에 개발 PC 퍼블릭 IP 추가
+# 3. .env 파일에 RDS_HOST=<Cloud SQL 퍼블릭 IP> 등 입력
+# 4. psql 또는 Cloud Shell 접속 후 pgvector 확장 활성화:
+#    CREATE EXTENSION IF NOT EXISTS vector;
+# 5. USE_MOCK_DATA=false 로 변경 후 실제 ETL 실행
+#
+# [참고] KIAT/KOITA Excel 파일 배치 방법:
+#   - data/raw/kiat_industry_2024.xlsx       (KIAT 통계 파일)
+#   - data/raw/koita_robot_survey_2024.xlsx  (KOITA 로봇 실태조사)
+#   배치 후 weekly_etl DAG 실행 → FileSensor가 자동 감지
+# ──────────────────────────────────────────────────────────────────────────────

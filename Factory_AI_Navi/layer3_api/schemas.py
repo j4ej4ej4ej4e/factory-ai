@@ -1,0 +1,33 @@
+"""
+layer3_api/schemas.py
+======================
+FastAPI Pydantic 요청/응답 스키마
+"""
+
+from pydantic import BaseModel, Field
+from typing import Optional
+
+
+class CompanyProfileRequest(BaseModel):
+    industry_code: str = Field(..., example="C25")
+    company_size: str = Field(..., example="small")
+    headcount: int = Field(..., ge=1, example=35)
+    annual_revenue: float = Field(..., gt=0, description="연간 매출액 (만원)", example=150000)
+    annual_production: float = Field(..., gt=0, description="연간 생산액 (만원)", example=130000)
+    defect_rate: Optional[float] = Field(None, ge=0, le=100, description="불량률 (%)", example=5.1)
+    operating_rate: Optional[float] = Field(None, ge=0, le=100, description="설비 가동률 (%)", example=60.0)
+    energy_cost_ratio: Optional[float] = Field(None, ge=0, le=100, description="에너지 비용 비율 (%)", example=11.0)
+    equipment_age: Optional[int] = Field(None, ge=0, description="설비 평균 노후도 (년)", example=8)
+    production_per_person: Optional[float] = Field(None, description="인당 생산액 (만원/년)", example=2800)
+    pain_points: list[str] = Field(default=[], example=["defect_high", "equipment_breakdown"])
+
+
+class ROISimulateRequest(BaseModel):
+    industry_code: str
+    company_size: str
+    headcount: int
+    annual_revenue: float
+    annual_production: float
+    ai_type: str = Field(..., example="predictive_maintenance")
+    estimated_cost: Optional[float] = Field(None, description="구축비용 (만원)")
+    co_funding_rate: Optional[float] = Field(0.5, description="자부담 비율")

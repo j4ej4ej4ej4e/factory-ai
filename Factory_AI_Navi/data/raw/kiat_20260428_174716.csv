@@ -1,0 +1,10 @@
+﻿industry_code,industry_name,company_size,reference_year,avg_production_per_person,avg_defect_rate,avg_operating_rate,ai_adoption_rate,avg_labor_cost_per_person,avg_energy_cost_ratio,avg_energy_consumption_toe,robot_adoption_rate,avg_robot_roi_months,data_source,raw_file_path
+C25,금속가공,small,2024,3100,3.8,68,4,3800,9.5,,6.0,18.0,KIAT_MOCK,
+C25,금속가공,medium,2024,4200,2.3,78,12,4200,8.2,,18.0,18.0,KIAT_MOCK,
+C25,금속가공,mid_large,2024,6100,1.5,85,28,5500,7.0,,42.0,18.0,KIAT_MOCK,
+C10,식품제조,small,2024,2800,2.1,72,3,3200,11.0,,4.5,18.0,KIAT_MOCK,
+C10,식품제조,medium,2024,3900,1.4,80,10,3900,9.8,,15.0,18.0,KIAT_MOCK,
+C10,식품제조,mid_large,2024,5500,0.9,88,22,5100,8.5,,33.0,18.0,KIAT_MOCK,
+C22,사출성형,small,2024,2600,4.2,65,5,3400,10.2,,7.5,18.0,KIAT_MOCK,
+C22,사출성형,medium,2024,3700,2.8,75,14,4000,8.9,,21.0,18.0,KIAT_MOCK,
+C22,사출성형,mid_large,2024,5200,1.8,83,30,5200,7.5,,45.0,18.0,KIAT_MOCK,
