@@ -22,12 +22,14 @@ from layer2_ai.tools.benchmark_tool import BenchmarkTool
 # Claude 시스템 프롬프트
 # ──────────────────────────────────────────────
 _SYSTEM_PROMPT = """당신은 중소 제조기업 AI 도입 전문 컨설턴트입니다.
-주어진 기업 데이터, 동종업계 벤치마크, 실제 도입 사례를 분석하여
-구체적인 수치 근거와 함께 AI 적용 우선순위를 제시합니다.
+사장님이 이미 알고 있는 현장 문제(주요 문제점)를 출발점으로 삼아,
+실측 공공데이터(가동률)와 실제 도입 사례(RAG 검색 결과)를 근거로
+"무엇을, 왜, 얼마나 효과가 있을지"를 뒷받침하는 AI 적용 우선순위를 제시합니다.
 
 원칙:
-- 반드시 제공된 벤치마크 수치를 인용할 것
-- 모호한 표현보다 구체적인 수치 예측을 제시할 것
+- 사장님이 이미 아는 문제를 되풀이하지 말고, 그 문제에 대한 근거(실제 사례·정량 효과)를 제시할 것
+- 가동률은 실측 공공데이터이므로 인용 가능하나, 불량률 동종평균은 추정치이므로 "참고치"로만 언급하고 확정적 비교 근거로 쓰지 말 것
+- 모호한 표현보다 RAG 검색 결과에 있는 구체적 수치·사례를 우선 인용할 것
 - 정부지원사업 연계 가능성을 항상 언급할 것
 - 뿌리업종(주조/금형/소성가공/용접/표면처리/열처리)은 소진공 뿌리업종 지원사업 우선 언급"""
 
@@ -69,10 +71,10 @@ _USER_PROMPT_TEMPLATE = """## 진단 요청 정보
     "ai_type": "predictive_maintenance",
     "ai_name": "예측유지보수",
     "target_process": "CNC 가공 공정",
-    "expected_effect": "설비 다운타임 40% 감소, 불량률 1.2%p 개선",
+    "expected_effect": "설비 다운타임 40% 감소 (유사 사례 기준)",
     "implementation_period": "3~6개월",
     "estimated_cost": 6000,
-    "rationale": "불량률이 동종평균보다 높고 설비 노후도가 있어 즉각적 효과 기대"
+    "rationale": "설비 잦은 고장(체크된 문제)과 가동률이 동종평균보다 낮은 점을 실제 도입 사례로 뒷받침"
   }},
   {{...}},
   {{...}}
@@ -208,8 +210,9 @@ class DiagnosticAgent:
         pain_ai = []
         for pp in pain_points:
             pain_ai.extend(PAIN_POINT_TO_AI.get(pp, []))
-        # 중복 제거, 업종 베스트 AI 우선
-        priority_ai = list(dict.fromkeys(best_ai + pain_ai))
+        # 중복 제거, 사장님이 직접 체크한 pain point 기반 AI 우선
+        # (업종 평균 best_ai는 pain_point 미입력 시 보조 후보로 사용)
+        priority_ai = list(dict.fromkeys(pain_ai + best_ai))
 
         # RAG: 첫 번째 우선 AI 유형으로 검색
         primary_ai = priority_ai[0] if priority_ai else "predictive_maintenance"
@@ -270,10 +273,10 @@ class DiagnosticAgent:
         # 벤치마크 텍스트
         peer = step_a.get("peer_data") or {}
         bench_lines = []
-        if peer.get("avg_defect_rate"):
-            bench_lines.append(f"- 동종업계 평균 불량률: {peer['avg_defect_rate']}%")
         if peer.get("avg_operating_rate"):
-            bench_lines.append(f"- 동종업계 평균 가동률: {peer['avg_operating_rate']}%")
+            bench_lines.append(f"- 동종업계 평균 가동률(KICOX 실측): {peer['avg_operating_rate']}%")
+        if peer.get("avg_defect_rate"):
+            bench_lines.append(f"- 동종업계 평균 불량률(참고 추정치, 확정 근거 아님): {peer['avg_defect_rate']}%")
         if peer.get("avg_labor_cost_per_person"):
             bench_lines.append(f"- 인당 인건비: {peer['avg_labor_cost_per_person']:,.0f}만원/년")
         if peer.get("avg_energy_cost_ratio"):

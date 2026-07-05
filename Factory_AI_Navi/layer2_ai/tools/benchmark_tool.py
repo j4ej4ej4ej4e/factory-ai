@@ -91,7 +91,10 @@ class BenchmarkTool:
                 "assessment": "양호" if gap_pct >= 0 else f"동종평균 대비 {abs(gap_pct):.1f}% 낮음",
             }
 
-        # ── 불량률 (낮을수록 좋음) ───────────────────
+        # ── 불량률 (참고용 — 업종별 공식 통계 없음, 추정치) ──
+        # peer_avg_defect_rate는 실측 공공데이터가 아닌 업계 참고 추정값이므로
+        # AI 우선순위 결정에는 쓰지 않고(get_improvement_potential 참조),
+        # 화면에는 "참고 추정치"로만 노출한다.
         if peer_data.get("avg_defect_rate") is not None and company_kpi.get("defect_rate") is not None:
             peer_v = peer_data["avg_defect_rate"]
             my_v   = company_kpi["defect_rate"]
@@ -102,7 +105,8 @@ class BenchmarkTool:
                 "company":    round(my_v, 2),
                 "peer_avg":   round(peer_v, 2),
                 "gap_pp":     round(gap_pp, 2),
-                "assessment": "양호" if gap_pp <= 0 else f"동종평균보다 {gap_pp:.2f}%p 높음 → 개선 필요",
+                "assessment": "양호" if gap_pp <= 0 else f"업계 참고치보다 {gap_pp:.2f}%p 높음",
+                "is_estimate": True,
             }
 
         # ── 가동률 (높을수록 좋음) ───────────────────
@@ -151,9 +155,9 @@ class BenchmarkTool:
         """
         priorities = []
 
-        defect = gap_analysis.get("defect_rate", {})
-        if defect.get("gap_pp", 0) > 0.5:
-            priorities.append(f"불량률 {defect['company']}% (동종평균 {defect['peer_avg']}%보다 {defect['gap_pp']:.2f}%p 높음)")
+        # 불량률은 업종별 실측 통계가 없는 추정치라 우선순위 결정에서 제외.
+        # 대신 diagnostic.py Step B에서 사용자가 직접 체크한 pain_points가
+        # AI 우선순위를 주도한다 (실제 데이터 기반).
 
         operating = gap_analysis.get("operating_rate", {})
         if operating.get("gap_pp", 0) < -5:

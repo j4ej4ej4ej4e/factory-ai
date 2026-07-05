@@ -8,10 +8,16 @@ AI 도입 투자 수익률을 계산합니다.
 
 계산식
 ------
-  연간 절감액 = 인건비 절감 + 에너지 절감 + 불량 절감
+  연간 절감액 = 인건비 절감 + 에너지 절감 + 가동률 개선에 따른 생산 증대
   투자 회수   = 자부담 / 연간 절감액 × 12 (개월)
   3년 순이익  = 연간 절감액 × 3 - 자부담
   ROI (3년)  = 3년 순이익 / 자부담 × 100 (%)
+
+※ 불량률 개선분은 계산에서 제외했다. 불량률은 업종별 실측 통계가 없는
+  추정치라 금액으로 환산하면 근거 없는 숫자가 되기 때문. 대신 가동률은
+  KICOX 실측 벤치마크가 있어, 그 실측 기준선 위에서 "AI 도입 시 가동률이
+  이만큼 개선되면 생산량이 이만큼 늘어난다"는 방식으로 계산한다
+  (개선폭 자체는 업계 사례 기반 가정치, calculation_basis에 명시).
 """
 
 from dataclasses import dataclass, field
@@ -34,10 +40,10 @@ class ROIResult:
     net_investment: float        # 실 자부담 (만원)
 
     # 절감액
-    labor_savings: float         # 인건비 절감 (만원/년)
-    energy_savings: float        # 에너지 절감 (만원/년)
-    defect_savings: float        # 불량 절감 (만원/년)
-    total_annual_savings: float  # 총 연간 절감액 (만원/년)
+    labor_savings: float           # 인건비 절감 (만원/년)
+    energy_savings: float          # 에너지 절감 (만원/년)
+    operating_uplift_savings: float  # 가동률 개선에 따른 생산 증대 (만원/년)
+    total_annual_savings: float    # 총 연간 절감액 (만원/년)
 
     # 수익성
     payback_months: float        # 투자 회수 기간 (개월)
@@ -58,7 +64,7 @@ class ROIResult:
             "net_investment":      f"{self.net_investment:,.0f}만원",
             "labor_savings":       f"{self.labor_savings:,.0f}만원/년",
             "energy_savings":      f"{self.energy_savings:,.0f}만원/년",
-            "defect_savings":      f"{self.defect_savings:,.0f}만원/년",
+            "operating_uplift_savings": f"{self.operating_uplift_savings:,.0f}만원/년",
             "total_annual_savings":f"{self.total_annual_savings:,.0f}만원/년",
             "payback_months":      f"{self.payback_months:.1f}개월",
             "three_year_profit":   f"{self.three_year_profit:,.0f}만원",
@@ -74,7 +80,8 @@ class ROIResult:
             f"  구축비용: {self.implementation_cost:,.0f}만원 "
             f"(정부지원 {self.gov_subsidy:,.0f}만원 / 자부담 {self.net_investment:,.0f}만원)\n"
             f"  연간 절감: {self.total_annual_savings:,.0f}만원"
-            f" (인건비 {self.labor_savings:,.0f} + 에너지 {self.energy_savings:,.0f} + 불량 {self.defect_savings:,.0f})\n"
+            f" (인건비 {self.labor_savings:,.0f} + 에너지 {self.energy_savings:,.0f}"
+            f" + 가동률개선 {self.operating_uplift_savings:,.0f})\n"
             f"  투자 회수: {self.payback_months:.1f}개월 | 3년 순이익: {self.three_year_profit:,.0f}만원 | ROI: {self.roi_pct:.0f}%\n"
         )
 
@@ -128,6 +135,13 @@ class ROICalculator:
         total_labor  = labor_cost_pp * headcount
         total_energy = annual_revenue * energy_ratio
 
+        # 가동률 기준선 — 회사 입력값 우선, 없으면 KICOX 실측 동종평균, 그마저 없으면 보수적 기본값
+        current_operating_rate = float(
+            company_profile.get("operating_rate")
+            or peer_data.get("avg_operating_rate")
+            or 75.0
+        )
+
         # 매칭된 지원사업 중 첫 번째 기준
         best_subsidy    = subsidies[0] if subsidies else {}
         co_funding_rate = float(best_subsidy.get("co_funding_rate") or 0.5)
@@ -138,6 +152,7 @@ class ROICalculator:
             result = self._calc_one(
                 ai_rec, params, total_labor, total_energy,
                 annual_production, co_funding_rate, subsidy_name,
+                current_operating_rate,
             )
             results.append(result)
             logger.debug("[ROI] %s → 회수 %.1f개월 / ROI %.0f%%",
@@ -154,6 +169,7 @@ class ROICalculator:
         annual_production: float,
         co_funding_rate: float,
         subsidy_name: str,
+        current_operating_rate: float,
     ) -> ROIResult:
         ai_type = ai_rec.get("ai_type", "")
         ai_name = ai_rec.get("ai_name", AI_APPLICATION_TYPES.get(ai_type, ai_type))
@@ -168,20 +184,24 @@ class ROICalculator:
         # 절감액
         labor_savings  = total_labor   * params.get("labor_reduction_rate",  0.08)
         energy_savings = total_energy  * params.get("energy_reduction_rate", 0.10)
-        defect_pp      = params.get("defect_improvement_pp", 1.0) / 100
-        defect_savings = defect_pp * annual_production
 
-        total_savings = labor_savings + energy_savings + defect_savings
+        # 가동률 개선 → 동일 설비로 생산량 증가 (가동률과 생산량은 비례한다고 가정)
+        operating_gain_pp = params.get("operating_rate_gain_pp", 5.0)
+        uplift_ratio = (operating_gain_pp / current_operating_rate) if current_operating_rate > 0 else 0
+        operating_uplift_savings = uplift_ratio * annual_production
+
+        total_savings = labor_savings + energy_savings + operating_uplift_savings
 
         payback     = (net_invest / total_savings * 12) if total_savings > 0 else 9999
         profit_3yr  = total_savings * 3 - net_invest
         roi_pct     = (profit_3yr / net_invest * 100) if net_invest > 0 else 0
 
         basis = [
-            f"인건비 절감률 {params['labor_reduction_rate']*100:.0f}% 적용",
-            f"에너지 절감률 {params['energy_reduction_rate']*100:.0f}% 적용",
-            f"불량률 {params['defect_improvement_pp']:.1f}%p 개선 가정",
-            "KIAT 산업기술통계 / 고용노동부 인건비 통계 기반",
+            f"인건비 절감률 {params['labor_reduction_rate']*100:.0f}% 적용 (가정치)",
+            f"에너지 절감률 {params['energy_reduction_rate']*100:.0f}% 적용 (가정치)",
+            f"가동률 {operating_gain_pp:.1f}%p 개선 가정 "
+            f"(기준선: {current_operating_rate:.0f}%, KICOX 실측 동종평균 기반)",
+            "인건비·에너지 비율은 KOSIS/업계 참고 추정치, 가동률 기준선은 KICOX 실측",
         ]
 
         return ROIResult(
@@ -193,7 +213,7 @@ class ROICalculator:
             net_investment=net_invest,
             labor_savings=labor_savings,
             energy_savings=energy_savings,
-            defect_savings=defect_savings,
+            operating_uplift_savings=operating_uplift_savings,
             total_annual_savings=total_savings,
             payback_months=payback,
             three_year_profit=profit_3yr,

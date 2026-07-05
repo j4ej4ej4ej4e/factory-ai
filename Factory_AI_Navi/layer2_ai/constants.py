@@ -23,7 +23,10 @@ ROOTS_INDUSTRY_CODES: list[str] = ["C243", "C251", "C259", "C289", "C301", "C302
 # implementation_cost_range : 구축비용 범위 (만원)
 # labor_reduction_rate      : 인건비 절감률 (0.0~1.0)
 # energy_reduction_rate     : 에너지 절감률 (0.0~1.0)
-# defect_improvement_pp     : 불량률 개선 포인트 (%)
+# operating_rate_gain_pp    : AI 도입으로 기대되는 가동률 개선 포인트(%p)
+#                             — 가동률은 KICOX 실측 벤치마크가 있어, 불량률(실측
+#                             통계 없음)보다 근거 있는 기준선 위에서 계산 가능.
+#                             개선폭 자체는 업계 사례 기반 가정치.
 # ──────────────────────────────────────────────
 INDUSTRY_ROI_PARAMS: dict[str, dict] = {
     "C243": {
@@ -31,7 +34,7 @@ INDUSTRY_ROI_PARAMS: dict[str, dict] = {
         "best_ai": ["process_control", "vision_inspection"],
         "labor_reduction_rate": 0.08,
         "energy_reduction_rate": 0.12,
-        "defect_improvement_pp": 1.5,
+        "operating_rate_gain_pp": 4.0,
         "implementation_cost_range": (5000, 10000),
     },
     "C251": {
@@ -39,7 +42,7 @@ INDUSTRY_ROI_PARAMS: dict[str, dict] = {
         "best_ai": ["predictive_maintenance", "vision_inspection"],
         "labor_reduction_rate": 0.10,
         "energy_reduction_rate": 0.05,
-        "defect_improvement_pp": 1.0,
+        "operating_rate_gain_pp": 8.0,
         "implementation_cost_range": (4000, 8000),
     },
     "C259": {
@@ -47,7 +50,7 @@ INDUSTRY_ROI_PARAMS: dict[str, dict] = {
         "best_ai": ["predictive_maintenance", "process_control"],
         "labor_reduction_rate": 0.07,
         "energy_reduction_rate": 0.10,
-        "defect_improvement_pp": 1.2,
+        "operating_rate_gain_pp": 6.0,
         "implementation_cost_range": (5000, 9000),
     },
     "C289": {
@@ -55,7 +58,7 @@ INDUSTRY_ROI_PARAMS: dict[str, dict] = {
         "best_ai": ["vision_inspection", "robot_automation"],
         "labor_reduction_rate": 0.12,
         "energy_reduction_rate": 0.05,
-        "defect_improvement_pp": 1.3,
+        "operating_rate_gain_pp": 4.0,
         "implementation_cost_range": (4000, 8000),
     },
     "C301": {
@@ -63,7 +66,7 @@ INDUSTRY_ROI_PARAMS: dict[str, dict] = {
         "best_ai": ["energy_optimization", "process_control"],
         "labor_reduction_rate": 0.06,
         "energy_reduction_rate": 0.15,
-        "defect_improvement_pp": 1.0,
+        "operating_rate_gain_pp": 3.5,
         "implementation_cost_range": (4000, 7000),
     },
     "C302": {
@@ -71,7 +74,7 @@ INDUSTRY_ROI_PARAMS: dict[str, dict] = {
         "best_ai": ["energy_optimization", "process_control"],
         "labor_reduction_rate": 0.05,
         "energy_reduction_rate": 0.18,
-        "defect_improvement_pp": 0.8,
+        "operating_rate_gain_pp": 6.0,
         "implementation_cost_range": (6000, 10000),
     },
     "C10": {
@@ -79,7 +82,7 @@ INDUSTRY_ROI_PARAMS: dict[str, dict] = {
         "best_ai": ["vision_inspection", "quality_control"],
         "labor_reduction_rate": 0.10,
         "energy_reduction_rate": 0.06,
-        "defect_improvement_pp": 0.7,
+        "operating_rate_gain_pp": 3.0,
         "implementation_cost_range": (3000, 6000),
     },
     "C22": {
@@ -87,7 +90,7 @@ INDUSTRY_ROI_PARAMS: dict[str, dict] = {
         "best_ai": ["predictive_maintenance", "vision_inspection"],
         "labor_reduction_rate": 0.09,
         "energy_reduction_rate": 0.08,
-        "defect_improvement_pp": 1.4,
+        "operating_rate_gain_pp": 7.0,
         "implementation_cost_range": (4000, 8000),
     },
     "C25": {
@@ -95,7 +98,7 @@ INDUSTRY_ROI_PARAMS: dict[str, dict] = {
         "best_ai": ["predictive_maintenance", "vision_inspection"],
         "labor_reduction_rate": 0.10,
         "energy_reduction_rate": 0.07,
-        "defect_improvement_pp": 1.2,
+        "operating_rate_gain_pp": 7.0,
         "implementation_cost_range": (4000, 8000),
     },
     "C26": {
@@ -103,7 +106,7 @@ INDUSTRY_ROI_PARAMS: dict[str, dict] = {
         "best_ai": ["vision_inspection", "quality_control"],
         "labor_reduction_rate": 0.12,
         "energy_reduction_rate": 0.04,
-        "defect_improvement_pp": 0.4,
+        "operating_rate_gain_pp": 3.0,
         "implementation_cost_range": (5000, 10000),
     },
     "C29": {
@@ -111,7 +114,7 @@ INDUSTRY_ROI_PARAMS: dict[str, dict] = {
         "best_ai": ["predictive_maintenance", "robot_automation"],
         "labor_reduction_rate": 0.08,
         "energy_reduction_rate": 0.05,
-        "defect_improvement_pp": 0.7,
+        "operating_rate_gain_pp": 7.0,
         "implementation_cost_range": (5000, 9000),
     },
     "C30": {
@@ -119,7 +122,7 @@ INDUSTRY_ROI_PARAMS: dict[str, dict] = {
         "best_ai": ["vision_inspection", "quality_control", "robot_automation"],
         "labor_reduction_rate": 0.15,
         "energy_reduction_rate": 0.05,
-        "defect_improvement_pp": 0.3,
+        "operating_rate_gain_pp": 4.0,
         "implementation_cost_range": (6000, 12000),
     },
 }

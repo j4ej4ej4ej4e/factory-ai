@@ -36,8 +36,9 @@ export default function BenchmarkRadar({ gapAnalysis }: Props) {
 
   const data = keys.map(k => {
     const g = gapAnalysis[k]
+    const label = LABEL_MAP[k] ?? g.label
     return {
-      label: LABEL_MAP[k] ?? g.label,
+      label: g.is_estimate ? `${label} (추정)` : label,
       귀사:   normalize(k, g.company),
       업종평균: normalize(k, g.peer_avg),
     }

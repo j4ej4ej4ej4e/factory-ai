@@ -1,23 +1,27 @@
 # Factory AI Navi — 기술 스택 & 분석 과정 상세 기술서
 
-> 제14회 산업통상부 공공데이터 활용 아이디어 공모전 | 제품 및 서비스 개발 부문  
-> 최종 수정: 2026-06-29 (v2.0 — 12개 핵심 업종 심화 설계 반영)
+> 제14회 산업통상부 공공데이터 활용 아이디어 공모전 | 제품 및 서비스 개발 부문
+> 최종 수정: 2026-07-05 (v3.0 — 실제 구현 코드 기준 전면 재작성)
+
+> ⚠️ 이 문서는 실제 저장소 코드(`layer1_etl/`, `layer2_ai/`, `layer3_api/`, `layer3_frontend/`)를
+> 직접 확인하여 작성했습니다. 구현되지 않은 기능(예: 이전 버전에서 언급했던 LangGraph, pgvector
+> 벡터검색, OpenAI 임베딩, 카카오 알림톡)은 모두 제외했고, 실제로 동작하는 부분만 기술합니다.
 
 ---
 
 ## 목차
 
-1. [전체 시스템 아키텍처 개요](#1-전체-시스템-아키텍처-개요)
-2. [레이어 1 — 데이터 수집 & ETL 파이프라인](#2-레이어-1--데이터-수집--etl-파이프라인)
-3. [레이어 2 — AI 분석 엔진 (핵심)](#3-레이어-2--ai-분석-엔진-핵심)
+1. [전체 시스템 아키텍처](#1-전체-시스템-아키텍처)
+2. [레이어 1 — 데이터 수집 & ETL](#2-레이어-1--데이터-수집--etl)
+3. [레이어 2 — AI 분석 엔진](#3-레이어-2--ai-분석-엔진)
 4. [레이어 3 — 서비스 API & 프론트엔드](#4-레이어-3--서비스-api--프론트엔드)
 5. [분석 과정 Step-by-Step](#5-분석-과정-step-by-step)
 6. [기술 스택 전체 요약표](#6-기술-스택-전체-요약표)
-7. [핵심 업종 12개 설계 명세](#7-핵심-업종-12개-설계-명세)
+7. [데이터 실측/추정 구분표 — 정직성 체크리스트](#7-데이터-실측추정-구분표--정직성-체크리스트)
 
 ---
 
-## 1. 전체 시스템 아키텍처 개요
+## 1. 전체 시스템 아키텍처
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -26,495 +30,291 @@
 │    LAYER 1       │       LAYER 2        │       LAYER 3         │
 │  데이터 수집     │    AI 분석 엔진      │    서비스 레이어      │
 │                  │                      │                       │
-│ 공공데이터 API   │  LangGraph 오케스트  │  REST API (FastAPI)   │
-│ ETL 파이프라인   │  레이터              │  Web Dashboard        │
-│ PostgreSQL DB    │  RAG Engine          │  (Next.js 14)         │
-│ Airflow 스케줄   │  ROI 계산 모델       │  PDF 레포트 생성      │
-│                  │  매칭 알고리즘       │  알림 서비스 (카카오) │
+│ 공공데이터 API   │  Orchestrator        │  FastAPI (SSE 스트림) │
+│ ETL 파이프라인   │  (순수 Python 클래스 │  Next.js 14 대시보드  │
+│ SQLite(dev)/     │   기반 순차 실행,    │  PDF 레포트 생성      │
+│  PostgreSQL(prod)│   LangGraph 미사용)  │  (ReportLab)          │
+│ Airflow DAG      │  온라인 RAG 엔진     │                       │
+│ (Docker Compose) │  ROI 계산 모델       │                       │
 └──────────────────┴──────────────────────┴───────────────────────┘
 ```
 
 ### 핵심 설계 원칙
 
-- **데이터 주도**: 모든 진단 결과는 공공데이터 기반 수치 근거 제시 (hallucination 방지)
-- **에이전트 자율성**: 업종·공정만 입력하면 진단→분석→추천→레포트 생성까지 자율 수행
-- **12개 업종 심화**: 47개 전체 업종 피상적 커버 대신 12개 핵심 업종 엄격한 벤치마크 구축
-- **확장 가능한 RAG**: 업종별 케이스 DB를 지속 학습·업데이트하여 정확도 점진 향상
+- **실측 우선**: 벤치마크 중 KICOX 가동률만 실측 공공데이터이고, 나머지(불량률·AI도입률·인당생산액 등)는
+  참고 추정치로 명확히 구분해 표시합니다. AI 우선순위 결정과 ROI 금액 계산에는 실측치(가동률)와
+  사용자가 직접 입력한 값(pain point 체크)만 사용하고, 추정치는 화면 참고용으로만 노출합니다.
+- **온라인 RAG**: 사전 구축한 벡터 DB 없이, 매 진단 시점에 실시간 웹 검색(Naver+Tavily)으로
+  최신 사례를 가져와 근거로 제시합니다.
+- **12개 업종 심화**: 47개 전체 업종 대신 12개 핵심 업종(뿌리업종 6 + 일반 제조업 6)에
+  집중해 업종별 AI 매핑·ROI 파라미터를 세밀하게 설계했습니다.
+- **에이전트 자율성**: 업종·공정·현장 문제만 입력하면 지원사업 매칭→벤치마크 분석→AI 우선순위
+  도출→ROI 계산까지 자율 수행합니다 (`Orchestrator.run()` 단일 호출).
 
 ---
 
-## 2. 레이어 1 — 데이터 수집 & ETL 파이프라인
+## 2. 레이어 1 — 데이터 수집 & ETL
 
-### 2.1 핵심 업종 12개 & 벤치마크 DB 설계
+### 2.1 핵심 업종 12개
 
-v2.0부터 MVP를 3개 업종에서 12개 핵심 업종으로 확대하되, 각 업종의 수치를 엄격하게 설계합니다.
+**그룹 A — 뿌리업종 6개** (정부 특별 지원 대상)
 
-**그룹 A — 뿌리업종 6개** (정부 특별 지원 대상, AI 도입률 최저)
+| KSIC | 업종명 | 핵심 공정 | 주요 AI 적용 |
+|------|--------|-----------|-------------|
+| C243 | 주조 | 용해→주입→냉각→탈사→검사 | 공정제어, 비전검사 |
+| C251 | 금형 | 설계→가공→열처리→측정→검사 | 예측유지보수, 비전검사 |
+| C259 | 소성가공 | 가열→단조/압연→트리밍→검사 | 예측유지보수, 공정제어 |
+| C289 | 용접 | 준비→용접→비파괴검사→후처리 | 비전검사, 로봇자동화 |
+| C301 | 표면처리 | 전처리→도금/도장→검사→폐수처리 | 에너지최적화, 공정제어 |
+| C302 | 열처리 | 전처리→로 처리→냉각→경도검사 | 에너지최적화, 공정제어 |
 
-| KSIC | 업종명 | 핵심 공정 | 주요 AI 적용 | 특이사항 |
-|------|--------|-----------|-------------|---------|
-| C243 | 주조 | 용해→주입→냉각→탈사→검사 | 용탕온도 AI제어, 기포결함 비전검사 | 에너지 비중 18% 최고 수준 |
-| C251 | 금형 | 설계→가공→열처리→측정→검사 | 공구마모 예측, 치수 비전검사 | 뿌리업종 중 사업체 수 1위 |
-| C259 | 소성가공 | 가열→단조/압연→트리밍→검사 | 소재온도 프로파일 AI, 금형마모 예측 | 에너지+불량 이중 문제 |
-| C289 | 용접 | 준비→용접→비파괴검사→후처리 | 비드품질 실시간 비전, 기공/균열 탐지 | 품질이 작업자 숙련도에 100% 의존 |
-| C301 | 표면처리 | 전처리→도금/도장→검사→폐수처리 | 도막두께 AI측정, 약품농도 자동제어 | 환경규제+품질 이중 압박 |
-| C302 | 열처리 | 전처리→로 처리→냉각→경도검사 | 로 온도 프로파일 최적화, 경도 예측 | 에너지 매출 대비 28% — ROI 최대 |
+**그룹 B — 일반 제조업 6개**
 
-**그룹 B — 일반 제조업 6개** (사업체 수 많고 AI 수요 높음)
+| KSIC | 업종명 | 핵심 공정 | 주요 AI 적용 |
+|------|--------|-----------|-------------|
+| C10 | 식품제조 | 원료→가공→포장→HACCP→출하 | 비전검사, 품질관리 |
+| C22 | 사출성형 | 수지투입→사출→냉각→취출→검사 | 예측유지보수, 비전검사 |
+| C25 | 금속가공 | 소재→절삭/프레스→조립→검사 | 예측유지보수, 비전검사 |
+| C26 | 전자부품 | 기판→SMT 실장→납땜→AOI→완성 | 비전검사, 품질관리 |
+| C29 | 산업기계 | 부품가공→조립→성능시험→출하 | 예측유지보수, 로봇자동화 |
+| C30 | 자동차부품 | 프레스/사출→도장→조립→외관검사 | 비전검사, 품질관리, 로봇자동화 |
 
-| KSIC | 업종명 | 핵심 공정 | 주요 AI 적용 | 특이사항 |
-|------|--------|-----------|-------------|---------|
-| C10 | 식품제조 | 원료→가공→포장→HACCP→출하 | 이물검출 비전, 중량편차 AI모니터링 | HACCP 규제로 AI 도입 명분 명확 |
-| C22 | 사출성형 | 수지투입→사출→냉각→취출→검사 | 웰드라인/기포 비전, 수지온도·압력 제어 | 불량률 高, 에너지 낭비 高 |
-| C25 | 금속가공 | 소재→절삭/프레스→조립→검사 | 공구마모 예측유지보수, 치수 자동측정 | 국내 중소제조업 사업체 수 1위 |
-| C26 | 전자부품 | 기판→SMT 실장→납땜→AOI→완성 | AOI 연계 AI 불량분류, 납땜 비전검사 | AI 도입 성공사례 多 → RAG 케이스 풍부 |
-| C29 | 산업기계 | 부품가공→조립→성능시험→출하 | 조립 토크/규격 AI모니터, 납기 수요예측 | 스마트공장 2.0 주요 타겟 |
-| C30 | 자동차부품 | 프레스/사출→도장→조립→외관검사 | 외관 비전검사, Cpk 실시간 공정능력 | IATF16949 납품 품질기준 엄격 |
+### 2.2 데이터 수집기(Collector) 실제 연동 현황
 
-### 2.2 벤치마크 수치 설계 (kiat_industry_stats 테이블 24행)
+`layer1_etl/collectors/`의 각 수집기는 `collect()`(실제 API) / `get_mock_data()`(폴백) 구조를
+공통으로 가지며, API 키가 플레이스홀더면 자동으로 mock으로 대체합니다.
 
-기업 규모: `small` = 50인 미만 / `medium` = 50~300인 미만
+| 수집기 | 상태 | 상세 |
+|---|---|---|
+| `ksnpc_collector.py` (KICOX) | ✅ **실데이터 (v2.0)** | odcloud.kr 파일데이터 API 3종(가동률/생산실적/수출실적) 연동. KICOX가 제공하는 업종 대분류 10종을 우리 12개 KSIC 코드로 근사 매핑(`CATEGORY_MAP`), 생산가중평균 가동률 계산. 2026-03 기준 |
+| `bizinfo_collector.py` (기업마당) | ✅ **실데이터** | 실시간 공고 API, AI/제조 연관 키워드로 자동 필터링 |
+| `kstartup_collector.py` (K-Startup) | ✅ **실데이터** | 실시간 공고 API, `ServiceKey`(대문자 S) 파라미터 필요 |
+| `keit_collector.py` (KEIT) | ❌ **미사용** | mock 데이터만 존재, 실제 크롤링 미구현 — 지원사업 파이프라인에서 제외 (BIZINFO·K-Startup으로 대체) |
+| `ntis_collector.py` (NTIS) | ⚠️ **키 검증만** | API 키 발급·XML 응답 확인은 완료했으나 실제 파싱 로직 미구현. 지원사업 매칭 파이프라인에는 미포함 |
+| `kiat_collector.py` / `koita_collector.py` | ⚠️ **참고 인용만** | KIAT 산업기술통계집, KOITA 로봇산업실태조사 PDF를 페이지 단위로 직접 확인한 결과, 우리가 필요한 업종별 세분류 불량률·AI도입률 데이터는 없음을 확인. 시장 규모 근거(제조업 AI 활용기업 수 추이 등)로만 기획서에 인용하고, 벤치마크 DB에는 mock 값 유지 |
 
-```
-KSIC │ 규모   │ 불량% │ 가동% │ AI%  │ 인건비  │ 에너지% │ 로봇% │ ROI월 │ 생산액  │ 재료비%
-     │        │       │       │      │(만원/년)│         │       │       │(만원/년)│
-─────┼────────┼───────┼───────┼──────┼─────────┼─────────┼───────┼───────┼─────────┼────────
-C243 │ small  │  5.2  │  62   │  1.5 │  3,600  │   18    │   3   │  36   │  2,800  │   55
-C243 │ medium │  3.8  │  72   │  3.0 │  4,200  │   15    │   8   │  30   │  4,000  │   58
-C251 │ small  │  3.0  │  68   │  2.0 │  4,100  │    8    │   2   │  30   │  3,200  │   30
-C251 │ medium │  1.8  │  78   │  5.0 │  4,800  │    7    │   6   │  24   │  4,800  │   32
-C259 │ small  │  3.5  │  65   │  1.5 │  3,700  │   14    │   2   │  36   │  2,600  │   50
-C259 │ medium │  2.2  │  74   │  3.5 │  4,300  │   12    │   6   │  30   │  3,800  │   52
-C289 │ small  │  4.2  │  70   │  2.0 │  3,500  │    7    │   5   │  28   │  2,400  │   45
-C289 │ medium │  2.8  │  78   │  4.5 │  4,100  │    6    │  15   │  24   │  3,500  │   48
-C301 │ small  │  3.3  │  67   │  1.0 │  3,400  │   20    │   1   │  40   │  2,200  │   35
-C301 │ medium │  2.0  │  75   │  2.5 │  3,900  │   17    │   3   │  32   │  3,200  │   38
-C302 │ small  │  2.5  │  72   │  1.5 │  3,600  │   28    │   1   │  36   │  2,800  │   25
-C302 │ medium │  1.5  │  80   │  3.5 │  4,200  │   24    │   2   │  28   │  4,100  │   28
-C10  │ small  │  1.8  │  75   │  2.5 │  3,100  │   10    │   2   │  28   │  2,800  │   65
-C10  │ medium │  0.9  │  82   │  6.0 │  3,800  │    9    │   5   │  22   │  4,100  │   68
-C22  │ small  │  4.0  │  66   │  4.0 │  3,400  │   11    │   4   │  26   │  2,600  │   55
-C22  │ medium │  2.5  │  76   │  9.0 │  4,000  │    9    │  12   │  20   │  3,800  │   58
-C25  │ small  │  3.2  │  68   │  3.5 │  3,800  │    9    │   5   │  24   │  3,200  │   45
-C25  │ medium │  1.8  │  78   │ 11.0 │  4,400  │    8    │  16   │  18   │  4,700  │   48
-C26  │ small  │  1.2  │  80   │ 12.0 │  4,100  │    6    │   8   │  18   │  4,800  │   52
-C26  │ medium │  0.5  │  87   │ 22.0 │  5,000  │    5    │  22   │  14   │  7,200  │   55
-C29  │ small  │  2.0  │  72   │  4.5 │  4,100  │    5    │   4   │  26   │  3,800  │   40
-C29  │ medium │  1.2  │  80   │  9.0 │  4,800  │    5    │  12   │  20   │  5,600  │   42
-C30  │ small  │  0.8  │  84   │ 10.0 │  4,200  │    7    │  15   │  18   │  4,500  │   50
-C30  │ medium │  0.3  │  90   │ 20.0 │  5,100  │    6    │  35   │  12   │  7,000  │   53
-```
+**검토했으나 채택하지 않은 데이터셋**: KOSIS 광업제조업조사(`DT_1FS1104_R` 등) — 실제 Open API 접근에
+성공했고 12개 KSIC 업종 코드 전부 확인했으나, **최신 데이터가 2019년까지만 존재**해 최신성 기준을
+충족하지 못해 제외.
 
-> **데이터 출처**: 인건비 → KOSIS 사업체노동력조사 / 인당생산액 → KIAT 산업기술통계집 p.169 /
-> 불량률·가동률·AI도입률·에너지비율 → 연구 기반 추정값 (data_source: 'KIAT_MANUAL_2024')
+### 2.3 벤치마크 테이블 스키마 (`kiat_industry_stats`, 24행 = 12업종 × 2규모)
 
-### 2.3 데이터 소스 매핑
+`layer1_etl/models/industry_stats.py`의 `KiatIndustryStat` 모델 기준:
 
-| 지표 | 소스 파일 | 위치 | 수집 방식 |
-|-----|---------|------|---------|
-| 인당 인건비, 근로시간 | KOSIS 사업체노동력조사 Excel | A~C열 (업종/규모/측정값) | KOSIS 재다운로드 (C26/C29/C30/100~299인 추가) |
-| 인당 생산액 (노동생산성) | 2025년 산업기술통계집.pdf | PART3 p.169 (4-27항) | PDF 파싱 or 수동 추출 |
-| 로봇 도입 현황 | 2024년 기준 로봇산업 실태조사.pdf | p.52 [표 4-11], p.62 [표 4-22] | 적용산업별 생산·출하 → 간접 추정 |
-| 불량률, 가동률 | 없음 (별도 수집 필요) | - | 수동 입력 (연구 기반 추정) |
-| AI 도입률 | 없음 (별도 수집 필요) | - | 수동 입력 (중기부 스마트공장 현황 참고) |
-| 지원사업 공고 | KEIT 웹사이트 + 국가R&D API | - | 실시간 수집 (매일 갱신) |
+| 컬럼 | 실측 여부 | 출처 |
+|---|---|---|
+| `avg_operating_rate` (가동률) | ✅ 실측 | KICOX 국가산업단지 산업동향정보 |
+| `ksnpc_production_billion_krw` / `ksnpc_export_million_usd` | ✅ 실측 | KICOX (참고용 부가 지표) |
+| `avg_defect_rate` (불량률) | ⚠️ 추정 | 업종별 실측 공식 통계 없음 (KIAT/KOITA/KOSIS 모두 확인) |
+| `ai_adoption_rate` (AI도입률) | ⚠️ 추정 | 중기부 스마트공장 현황 등 참고 |
+| `avg_production_per_person` (인당생산액) | ⚠️ 추정 | — |
+| `avg_labor_cost_per_person` (인건비) | ⏳ 재작업 예정 | KOSIS 사업체노동력조사 업종별 재추출 필요 |
+| `avg_energy_cost_ratio`, `robot_adoption_rate`, `avg_robot_roi_months` | ⚠️ 추정 | — |
 
-### 2.4 KOSIS Excel 재다운로드 사양
+이 구분은 `layer2_ai/tools/benchmark_tool.py`의 `is_estimate` 플래그로 코드에도 그대로 반영되어
+있으며, 추정치는 AI 우선순위 결정·ROI 금액 계산에 사용하지 않습니다 (§3.3 참고).
+
+### 2.4 ETL 파이프라인
 
 ```
-URL: https://kosis.kr/statHtml/statHtml.do?orgId=118&tblId=DT_118N_MON051
-
-체크 항목:
-  [업종] C10 식료품 / C22 고무 및 플라스틱제품 / C25 금속가공제품
-         C26 전자부품 / C29 기타 기계 및 장비 / C30 자동차 및 트레일러  ← 추가 필요
-
-  [규모] 1~4인 / 5~9인 / 10~29인 / 30~99인                     ← 기존
-         100~299인                                              ← 추가 필요
-
-  ※ 뿌리업종(C243/C251/C259/C289/C301/C302)은 이 표에 없음
-     → 인건비는 상위 업종(C24/C25/C28/C30) 참고값으로 대체
+[수집] 공공데이터 API 호출 (odcloud.kr, bizinfo.go.kr, data.go.kr)
+   ↓
+[전처리] 업종 코드 표준화 · 기업 규모 매핑 · 결측값 처리(업종평균 대체) · 단위 통일
+   ↓
+[적재] SQLAlchemy ORM → SQLite(dev) / PostgreSQL(prod) — DATABASE_URL 환경변수로 자동 전환
+   ↓
+[스케줄링] Apache Airflow DAG 3종 (주간 ETL / 일간 지원사업 갱신 / 월간 정리)
+           — docker-compose.yml로 Airflow 스케줄러+웹서버만 컨테이너 실행
+             (FastAPI/Next.js 앱 자체는 uvicorn/npm으로 로컬 직접 실행, 별도 앱 컨테이너 없음)
 ```
 
-### 2.5 ETL 파이프라인 구성
-
-```
-[수집 단계]
-공공데이터 API 호출 / 파일 다운로드 / PDF 파싱
-       ↓
-[전처리 단계]
-· 업종 코드 표준화 (KSIC 10차 기준 통일)
-· 기업 규모 매핑: KOSIS 인원 구간 → small/medium
-  (1~4인, 5~9인, 10~29인, 30~49인 → small)
-  (50~99인, 100~299인              → medium)
-· 결측값 처리 (업종 평균값 imputation)
-· 단위 통일 (억원→만원, 천㎡→㎡)
-       ↓
-[적재 단계]
-PostgreSQL (정형 데이터) + pgvector (임베딩)
-       ↓
-[스케줄링]
-Apache Airflow DAG 자동 실행
-```
-
-### 2.6 수집 대상 데이터셋 전체
-
-| 기관 | 데이터셋 | 수집 방식 | 갱신 주기 | 활용 목적 |
-|-----|---------|---------|---------|---------|
-| KOSIS | 산업/규모별 임금 및 근로시간 | 파일 다운로드 | 연 1회 | 업종별 인건비 벤치마크 |
-| KIAT | 산업기술통계집 (인당 노동생산성) | PDF 파싱 | 연 1회 | 인당 생산액 벤치마크 |
-| KIRIA | 로봇산업 실태조사 (적용산업별) | PDF 파싱 | 연 1회 | 로봇 도입 현황 참고 |
-| KEIT | 사업공고 현황 (R&D 과제 목록) | 파일+크롤링 | 주 1회 | 정부지원사업 매칭 |
-| 국가R&D | 과제검색 API | Open API | 실시간 | R&D 사업 매칭 |
-| 중기부 | 스마트공장 구축기업 수준 DB | 파일 | 반기 | AI 도입 단계 파악 |
-| 소진공 | 뿌리업종 업체 현황·지원금 목록 | 파일+API | 반기 | 뿌리업종 특화 지원 |
+실행: `python -m layer1_etl.main --source all` (또는 `--source ksnpc`, `--source bizinfo` 등
+단일 수집기 지정 가능)
 
 ---
 
-## 3. 레이어 2 — AI 분석 엔진 (핵심)
+## 3. 레이어 2 — AI 분석 엔진
 
-### 3.1 전체 AI 아키텍처
-
-```
-사용자 입력 (업종 / 공정 단계 / 설비 노후도 / 기업 규모)
-       ↓
-┌──────────────────────────────────────────────┐
-│           LangGraph 멀티 에이전트            │
-│                                              │
-│  ┌──────────────┐    ┌──────────────────┐   │
-│  │ 진단 에이전트│    │  매칭 에이전트   │   │
-│  │  (3단계)     │───▶│ (지원사업 검색)  │   │
-│  └──────┬───────┘    └──────────────────┘   │
-│         │                                    │
-│  ┌──────▼───────┐    ┌──────────────────┐   │
-│  │ RAG 검색    │    │  ROI 계산 에이전트│   │
-│  │  엔진       │───▶│                   │   │
-│  └─────────────┘    └──────────────────┘   │
-└──────────────────────────────────────────────┘
-       ↓
-Claude API (claude-sonnet-4-6) — 최종 레포트 생성
-```
-
-### 3.2 RAG (Retrieval-Augmented Generation) 엔진
-
-공정 진단의 정확도를 높이기 위해 12개 업종별 AI 도입 성공·실패 케이스 DB를 구축하고,
-사용자 입력과 유사한 케이스를 검색한 뒤 LLM에게 컨텍스트로 제공합니다.
-
-#### RAG 파이프라인 상세
+### 3.1 실제 아키텍처
 
 ```
-[오프라인 - 문서 인덱싱]
+company_profile (업종/규모/현재 KPI/체크한 현장 문제)
+       ↓
+┌───────────────────────────────────────────────────────────┐
+│              Orchestrator.run()  (순수 Python)             │
+│                                                             │
+│  ① MatchingAgent.match()       — 지원사업 1차 매칭         │
+│  ② DiagnosticAgent.run_step_a()— 벤치마크 갭 분석          │
+│  ③ DiagnosticAgent.run_step_b()— RAG 검색 + LLM 우선순위   │
+│  ④ MatchingAgent.match()       — AI유형 반영 재매칭        │
+│  ⑤ DiagnosticAgent.run_step_c()— ROI 계산 (ROICalculator)  │
+└───────────────────────────────────────────────────────────┘
+       ↓
+DiagnosisReport (dataclass) → JSON / SSE 스트리밍
+```
 
-① 소스 문서 수집 (12개 업종 × 3건 이상 = 36건+)
-   · 뿌리업종 AI 도입 성공/실패 사례 (소진공·산업부 발행)
-   · KIAT 산업기술통계 업종별 리포트
-   · 로봇진흥원 실태조사 세부 데이터
-   · 제조 공정 개선 가이드라인 (산업부 발행)
-   · 스마트공장 우수사례집 (중기부)
-       ↓
-② 청킹 (Chunking)
-   · 단위: 업종별 공정 케이스 1건 ≈ 1 청크
-   · 평균 청크 크기: 500~800 토큰
-   · 메타데이터: industry_code / process_type / ai_type / effect_pct / roi_months
-       ↓
-③ 임베딩 & 벡터 저장
-   · 임베딩 모델: text-embedding-3-small (OpenAI)
-   · 벡터DB: pgvector (PostgreSQL 확장)
-   · 인덱스: HNSW (m=16, ef_construction=64) — 근사 최근접 이웃 검색
+LangGraph 등 별도 에이전트 프레임워크 없이, `orchestrator.py`가 각 단계를 순서대로 호출하는
+단순한 구조입니다. 지원사업 매칭을 벤치마크 분석보다 먼저 1차 실행하는 이유는 ROI 계산에
+자부담 비율(`co_funding_rate`)이 필요하기 때문이고, AI 우선순위가 나온 뒤 AI 유형을 반영해
+한 번 더 재매칭합니다.
 
-[온라인 - 쿼리 처리]
-사용자 입력 ▶ 쿼리 임베딩 생성
+### 3.2 LLM 연동 (`layer2_ai/llm_client.py`)
+
+```python
+LLM_PROVIDER = os.getenv("LLM_PROVIDER", "claude")  # "claude" | "gemini"
+
+def call_llm(user: str, system: str = "", max_tokens: int = 1000) -> str:
+    if LLM_PROVIDER == "gemini":
+        return _call_gemini(user, system, max_tokens)   # google-genai SDK
+    return _call_claude(user, system, max_tokens)        # anthropic SDK
+```
+
+개발 중에는 Gemini 2.5 Flash(비용 절감), 운영 전환 시 Claude Sonnet 4.6으로 교체 가능하도록
+환경변수 하나로 스위칭됩니다.
+
+> ⚠️ 실행 전제조건: `.env`의 `GEMINI_API_KEY` / `ANTHROPIC_API_KEY`가 실제 키로 설정되어 있어야
+> 합니다. 플레이스홀더 상태면 LLM 호출 시 에러가 발생합니다.
+
+### 3.3 온라인 RAG 엔진 (`layer2_ai/rag/`)
+
+사전 구축한 벡터 DB(pgvector 등)를 쓰지 않고, **매 진단 요청마다 실시간 웹 검색**으로 사례를
+가져오는 방식입니다. `OnlineRAGRetriever.retrieve()` 5단계 파이프라인:
+
+```
+① Multi-Query 생성 (LLM)
+   "도입사례" / "비용·ROI" / "기술·공정효과" 3개 각도로 검색 쿼리 3개 생성
        ↓
-벡터 유사도 검색 (코사인 유사도 Top-10)
+② 병렬 검색 (ThreadPoolExecutor)
+   Naver 검색 API + Tavily API(선택, 키 없으면 자동 비활성화) 동시 호출
        ↓
-리랭킹 (BM25 키워드 + 벡터 유사도 하이브리드: 60/40)
+③ RRF(Reciprocal Rank Fusion) 합산
+   score(url) = Σ 1/(k + rank_i) — 여러 쿼리에서 반복 등장한 URL 가중치 상승
        ↓
-검색된 케이스 컨텍스트 + 사용자 입력 ▶ LLM 프롬프트 구성
+④ 본문 크롤링
+   상위 N건은 BeautifulSoup + lxml로 실제 본문 텍스트 추출 (나머지는 검색 스니펫 사용)
        ↓
-Claude API 호출 ▶ 구조화된 진단 결과 JSON 반환
+⑤ LLM Reranker
+   LLM이 "실제 도입사례 포함 여부·구체적 수치 포함 여부·한국 중소제조업 관련성" 기준으로
+   0~10점 채점 → 상위 5건만 최종 채택
+```
+
+> ⚠️ 실행 전제조건: `.env`의 `NAVER_CLIENT_ID`/`NAVER_CLIENT_SECRET`이 실제 키로 설정되어야
+> 검색이 동작합니다. 플레이스홀더 상태면 조용히 빈 결과를 반환합니다(에러는 아님).
+
+**실증 결과 (2026-06-30)**: 금속가공/예지보전 쿼리 → 3개 쿼리 × Naver 10건 = 30건 수집 →
+RRF 합산 후 Top10~29건 후보 → Reranker로 관련도 8~10/10인 Top5 선별 (예: saige.ai "ROI 10배
+달성" 사례, ZDNet "예지보전 AI" 기사 등 실제 수집 확인).
+
+### 3.4 벤치마크 갭 분석 (`tools/benchmark_tool.py`)
+
+```python
+def analyze_gap(company_kpi: dict, peer_data: dict) -> dict:
+    # 인당생산액 / 가동률 / 에너지비용비율 갭 계산 (동종평균 대비 %p, %)
+    # 불량률은 is_estimate=True 플래그를 붙여 "참고치"로만 반환
+    ...
+
+def get_improvement_potential(industry_code, gap_analysis) -> list[str]:
+    # 가동률·에너지비용·인당생산액 갭만 우선순위 트리거로 사용
+    # 불량률(추정치)은 우선순위 결정에서 제외 — 실측 근거가 없기 때문
+```
+
+### 3.5 AI 우선순위 도출 (`agents/diagnostic.py` Step B)
+
+```python
+pain_ai = []
+for pp in pain_points:                       # 사용자가 직접 체크한 현장 문제
+    pain_ai.extend(PAIN_POINT_TO_AI.get(pp, []))
+priority_ai = list(dict.fromkeys(pain_ai + best_ai))  # pain point 우선, 업종 기본값 보조
+
+primary_ai = priority_ai[0]
+rag_sources = rag_retriever.retrieve(industry_code, primary_ai, company_profile)
+# → LLM에 벤치마크(가동률 실측 + 불량률 참고치 구분 표시) + RAG 사례 + pain point를
+#   프롬프트로 구성해 AI 우선순위 Top3 JSON 생성
+```
+
+`PAIN_POINT_TO_AI` 매핑 예시 (`constants.py`):
+
+| Pain Point | 추천 AI 유형 |
+|---|---|
+| 설비 자주 고장 | 예측유지보수 |
+| 에너지 비용 과다 | 에너지최적화, 공정제어 |
+| 인력 부족 | 로봇자동화 |
+| 품질 균일성 불량 | 품질관리, 공정제어 |
+
+### 3.6 ROI 시뮬레이션 (`agents/roi_calculator.py`)
+
+```
+연간 절감액 = 인건비 절감 + 에너지 절감 + 가동률 개선에 따른 생산증대
+투자 회수   = 자부담 / 연간 절감액 × 12 (개월)
+3년 순이익  = 연간 절감액 × 3 - 자부담
 ```
 
 ```python
-from langchain.vectorstores import PGVector
-from langchain.embeddings import OpenAIEmbeddings
-from langchain.retrievers import BM25Retriever, EnsembleRetriever
+labor_savings  = total_labor  * params["labor_reduction_rate"]   # 가정치
+energy_savings = total_energy * params["energy_reduction_rate"]  # 가정치
 
-vectorstore = PGVector(
-    connection_string=DATABASE_URL,
-    embedding_function=OpenAIEmbeddings(model="text-embedding-3-small"),
-    collection_name="manufacturing_cases"
-)
-
-# 하이브리드 검색 (벡터 60% + BM25 키워드 40%)
-vector_retriever = vectorstore.as_retriever(search_kwargs={"k": 10})
-bm25_retriever   = BM25Retriever.from_documents(docs)
-ensemble = EnsembleRetriever(
-    retrievers=[vector_retriever, bm25_retriever],
-    weights=[0.6, 0.4]
-)
-
-def retrieve_cases(user_input: dict) -> list:
-    query = f"{user_input['industry']} {user_input['process']} AI 적용 사례"
-    return ensemble.get_relevant_documents(query)[:5]
+# 가동률 개선분 — 실측 가동률을 기준선으로 삼아 계산 (불량률 기반 계산 완전 제외)
+current_operating_rate = company_profile.get("operating_rate") \
+    or peer_data.get("avg_operating_rate") or 75.0   # KICOX 실측 동종평균 우선 사용
+operating_gain_pp = params["operating_rate_gain_pp"]              # 가정치
+uplift_ratio = operating_gain_pp / current_operating_rate
+operating_uplift_savings = uplift_ratio * annual_production
 ```
 
-### 3.3 공정 진단 AI 에이전트 (3단계)
+**왜 불량률 기반 계산을 뺐는가**: 불량률은 업종별 실측 통계가 전혀 없는 추정치라, 이걸 금액으로
+환산하면 근거 없는 숫자가 된다. 반면 가동률은 KICOX 실측 벤치마크가 있어, 그 실측 기준선 위에서
+"가동률이 몇 %p 개선되면 생산량이 얼마나 느는가"를 계산하면 최소한 기준선만큼은 실측 데이터에
+뿌리를 둔 숫자가 된다. 개선폭(`operating_rate_gain_pp`) 자체는 업계 사례 기반 가정치이며,
+이는 인건비·에너지 절감률도 마찬가지로 가정치임을 `calculation_basis` 필드에 항상 명시한다.
 
-사용자가 입력한 기업 프로파일을 기반으로 3단계 분석을 수행합니다.
+### 3.7 지원사업 매칭 (`tools/subsidy_tool.py`)
 
-#### Step A — 동종업계 벤치마크 분석
+**벡터 유사도가 아닌 규칙 기반 필터링 + 점수화**입니다:
 
 ```python
-def benchmark_analysis(industry_code: str, company_size: str) -> dict:
-    """
-    입력: 업종코드 (KSIC), 기업 규모 (small/medium)
-    출력: 동종업계 대비 생산성 갭 분석
-    """
-    peer_data = db.query("""
-        SELECT avg_production_per_person,   -- 인당 생산액
-               avg_defect_rate,             -- 평균 불량률
-               avg_operating_rate,          -- 평균 가동률
-               ai_adoption_rate,            -- AI 도입률
-               avg_energy_cost_ratio,       -- 에너지 비용 비율
-               robot_adoption_rate,         -- 로봇 도입률
-               avg_robot_roi_months         -- 로봇 ROI 회수기간
-        FROM kiat_industry_stats
-        WHERE industry_code = %s
-          AND company_size  = %s
-    """, (industry_code, company_size))
-
-    return {
-        "peer_avg":     peer_data,
-        "gap_analysis": calculate_gap(company_data, peer_data),
-        "percentile":   calculate_percentile(company_data, peer_data)
-    }
+def _calc_match_score(subsidy, industry_code, company_size, ai_types, is_roots):
+    # ① 업종 코드 불일치 → None (탈락)
+    # ② 기업 규모 불일치 → None (탈락)
+    score = 1.0
+    # ③ AI 유형 일치 개수만큼 가점 (+0.3 / 건)
+    # ④ 뿌리업종 + 뿌리업종 전용 카테고리면 가점 (+0.5)
+    return score
 ```
 
-**분석 예시 출력 (금속가공 C25 / small)**:
-```json
-{
-  "industry": "금속가공 (C25)",
-  "benchmark": {
-    "인당_생산액_동종평균": "3,200만원/년",
-    "귀사_추정":           "2,450만원/년",
-    "갭":                  "-24% (하위 35% 구간)",
-    "불량률_동종평균":     "3.2%",
-    "에너지비용_동종평균": "생산액의 9%"
-  },
-  "ai_도입시_개선가능": {
-    "불량률_감소":   "1.0~1.5%p (AI 비전검사 기준)",
-    "가동률_향상":   "7~12%p (예측유지보수 기준)",
-    "에너지절감":    "5~9% (공정최적화 기준)"
-  }
-}
-```
-
-#### Step B — AI 적용 우선순위 도출 (업종별 특화 파라미터)
-
-```python
-# 업종별 ROI 파라미터 (constants.py에 정의)
-INDUSTRY_ROI_PARAMS = {
-    "C243": {  # 주조
-        "best_ai": ["process_control", "vision_inspection"],
-        "labor_reduction_rate":  0.08,
-        "energy_reduction_rate": 0.12,  # 에너지 18% → 12% 절감 효과
-        "defect_improvement":    1.5,   # 불량률 5.2% → 3.7%p 개선 가능
-    },
-    "C302": {  # 열처리 — 에너지 ROI 최대
-        "best_ai": ["energy_optimization", "process_control"],
-        "labor_reduction_rate":  0.05,
-        "energy_reduction_rate": 0.18,  # 에너지 28% → 18% 절감 (가장 큰 효과)
-        "defect_improvement":    0.8,
-    },
-    "C10": {   # 식품 — HACCP 연계
-        "best_ai": ["vision_inspection", "quality_control"],
-        "labor_reduction_rate":  0.10,
-        "energy_reduction_rate": 0.06,
-        "defect_improvement":    0.7,   # 1.8% → 1.1%p 개선
-    },
-    "C26": {   # 전자부품 — 고정밀 AI 비전
-        "best_ai": ["vision_inspection", "quality_control"],
-        "labor_reduction_rate":  0.12,
-        "energy_reduction_rate": 0.04,
-        "defect_improvement":    0.4,   # 1.2% → 0.8%p (이미 낮은 불량률)
-    },
-    "C30": {   # 자동차부품 — 외관검사 + 공정능력
-        "best_ai": ["vision_inspection", "quality_control", "robot_automation"],
-        "labor_reduction_rate":  0.15,
-        "energy_reduction_rate": 0.05,
-        "defect_improvement":    0.3,   # 0.8% → 0.5%p (IATF 기준)
-    },
-    # ... 나머지 7개 업종 동일 패턴
-}
-```
-
-```python
-SYSTEM_PROMPT = """
-당신은 중소 제조기업 AI 도입 전문 컨설턴트입니다.
-주어진 기업 데이터와 동종업계 케이스를 분석하여
-다음 형식으로 AI 적용 우선순위를 제시하세요:
-
-[출력 형식]
-{
-  "priority_1": {
-    "ai_type": "예측유지보수 (Predictive Maintenance)",
-    "target_process": "CNC 가공 공정",
-    "expected_effect": "설비 다운타임 40% 감소",
-    "implementation_period": "3~6개월",
-    "estimated_cost": "3,000~5,000만원",
-    "reference_case": "동종업계 A사 적용 사례"
-  },
-  ...
-}
-
-반드시 공공데이터 기반 수치를 근거로 제시하세요.
-"""
-```
-
-#### Step C — ROI 시뮬레이션 모델
-
-```python
-def calculate_roi(company_profile: dict, ai_recommendation: dict) -> dict:
-    """
-    로봇진흥원 실태조사 + 고용노동부 인건비 통계 기반
-    AI 도입 투자 수익률 자동 계산
-    """
-    params = INDUSTRY_ROI_PARAMS[company_profile["industry_code"]]
-
-    labor_cost   = peer_data["avg_labor_cost_per_person"] * company_profile["headcount"]
-    energy_cost  = peer_data["avg_energy_cost_ratio"] * company_profile["annual_revenue"]
-    defect_value = peer_data["avg_defect_rate"] * company_profile["annual_production_value"]
-
-    # 연간 절감액 계산
-    labor_savings  = labor_cost  * params["labor_reduction_rate"]
-    energy_savings = energy_cost * params["energy_reduction_rate"]
-    defect_savings = params["defect_improvement"] / 100 * company_profile["annual_production_value"]
-
-    total_annual_saving = labor_savings + energy_savings + defect_savings
-
-    # 정부지원금 반영
-    gov_subsidy     = get_applicable_subsidy(company_profile)  # KEIT 매칭
-    net_investment  = ai_recommendation["implementation_cost"] - gov_subsidy
-
-    return {
-        "연간_절감액":    f"{total_annual_saving:,.0f}만원",
-        "투자_회수_기간": f"{net_investment / total_annual_saving * 12:.1f}개월",
-        "3년_순이익":     f"{total_annual_saving * 3 - net_investment:,.0f}만원",
-        "정부지원금":     f"{gov_subsidy:,.0f}만원 (자부담 {ai_recommendation['co_funding_rate']*100:.0f}%)",
-        "근거_데이터":    ["KIAT 산업기술통계", "고용노동부 인건비 통계", "로봇진흥원 실태조사"]
-    }
-```
-
-**ROI 계산 예시 출력 (열처리 C302 / 50인 / 에너지 최적화 AI)**:
-```
-============================================================
-Factory AI Navi — AI 도입 ROI 분석 결과
-[ 열처리 | 50인 규모 | 에너지 최적화 AI 적용 ]
-============================================================
-
-연간 예상 절감액
-├ 인건비 절감:    800만원 (간접 인력 1인 재배치)
-├ 설비 다운타임:  1,200만원 (비계획 중단 30% 감소)
-└ 에너지 절감:    3,360만원 (매출 대비 28% → 20%, 연매출 4.2억 기준)
-  소계:           5,360만원/년
-
-투자 비용
-├ 총 구축비용:   8,000만원
-├ 정부지원금:   -4,000만원 (에너지절감 스마트공장 지원)
-└ 실 자부담:     4,000만원
-
-투자 수익성
-├ 투자 회수 기간: 8.9개월
-├ 3년 순이익:    12,080만원
-└ ROI (3년):     302%
-
-근거 데이터
-  KIAT 산업기술통계 / 고용노동부 인건비 통계 / 로봇진흥원 실태조사 2024
-============================================================
-```
-
-### 3.4 정부지원사업 매칭 에이전트
-
-```python
-class SubsidyMatchingAgent:
-    """
-    KEIT 사업공고 + 국가R&D API + 중기부 스마트공장 지원사업
-    실시간 수집·분류 후 기업 프로파일과 매칭
-    """
-    def match(self, company_profile: dict, diagnosis: dict) -> list:
-        # 기업 프로파일 + 진단 결과 → 임베딩 벡터
-        company_vector = embed(
-            f"{company_profile['industry']} "
-            f"{company_profile['size']} "
-            f"{diagnosis['ai_type']}"
-        )
-        # 코사인 유사도 기반 매칭 (임계값 0.75)
-        matches = []
-        for subsidy in self.subsidies:
-            score = cosine_similarity(company_vector, subsidy["vector"])
-            if score > 0.75:
-                matches.append({
-                    "사업명":   subsidy["name"],
-                    "지원금액": subsidy["max_amount"],
-                    "신청마감": subsidy["deadline"],
-                    "자부담비율": subsidy["co_funding_rate"],
-                    "매칭점수": f"{score:.0%}",
-                    "신청링크": subsidy["apply_url"]
-                })
-        # 마감 D-7 이내 긴급 공고 우선 정렬
-        return sorted(matches, key=lambda x: (x["마감임박"], -float(x["매칭점수"][:-1])))[:5]
-```
+정렬 기준: 마감 D-7 이내 긴급 공고 최우선 → 매칭 점수 내림차순 → 마감일 오름차순.
+(`keit_subsidies` 테이블에 `embedding` 컬럼이 정의는 되어 있으나 주석 처리된 미사용 상태입니다.)
 
 ---
 
 ## 4. 레이어 3 — 서비스 API & 프론트엔드
 
-### 4.1 FastAPI 백엔드 엔드포인트
+### 4.1 FastAPI 백엔드 (`layer3_api/`)
 
 | 메서드 | 엔드포인트 | 설명 |
 |--------|-----------|------|
-| POST | /api/v1/diagnose | 스트리밍 진단 응답 (SSE) |
-| GET | /api/v1/subsidies | 현재 신청 가능 지원사업 목록 |
-| POST | /api/v1/roi-simulate | ROI 시뮬레이션 |
-| GET | /api/v1/report/{id}/pdf | PDF 레포트 다운로드 |
+| POST | `/api/v1/diagnose` | SSE 스트리밍 진단 (`progress`→`step_result`×3→`complete`/`error` 이벤트) |
+| GET | `/api/v1/subsidies` | 현재 신청 가능 지원사업 목록 |
+| POST | `/api/v1/roi-simulate` | 단일 AI 유형 ROI 재계산 |
+| GET | `/api/v1/report/{id}` | 진단 결과 JSON (LRU 캐시, 최대 100개) |
+| GET | `/api/v1/report/{id}/pdf` | ReportLab 기반 PDF 레포트 다운로드 |
 
-### 4.2 사용자 입력 화면 (Step 1)
+`diagnose.py`는 `asyncio.get_event_loop().run_in_executor()`로 각 단계를 실행하며, 매 단계마다
+SSE 이벤트를 즉시 클라이언트로 흘려보냅니다(사용자가 "지원사업 검색 중... → 벤치마크 분석 중...
+→ AI 우선순위 도출 중... → ROI 계산 중..." 진행 상황을 실시간으로 봄).
 
-```
-업종 선택 (12개):
-  뿌리업종 그룹: 주조 / 금형 / 소성가공 / 용접 / 표면처리 / 열처리
-  일반 제조업:   식품 / 사출성형 / 금속가공 / 전자부품 / 산업기계 / 자동차부품
+### 4.2 Next.js 14 프론트엔드 (`layer3_frontend/`)
 
-기업 규모:
-  소기업 (50인 미만) / 중기업 (50~300인)
+| 컴포넌트 | 역할 |
+|---|---|
+| `LandingPage.tsx` | 서비스 소개 랜딩 |
+| `InputForm.tsx` | 업종 12개, 기업규모, KPI, 현장 문제(pain point) 체크박스 입력 |
+| `DiagnoseProgress.tsx` | SSE `ReadableStream` 수신, 실시간 진행 표시 |
+| `ResultDashboard.tsx` | 전체 결과 조합 대시보드 |
+| `BenchmarkRadar.tsx` | Recharts 레이더차트 (귀사 vs 업종평균, 추정치 항목은 "(추정)" 라벨 자동 표시) |
+| `ROIBarChart.tsx` | Recharts 막대그래프, ROI 비교 |
+| `SubsidyTable.tsx` | 지원사업 테이블 (긴급/뿌리업종 배지) |
 
-공정 정보:
-  현재 불량률 (%) / 설비 가동률 (%) / 설비 노후도 (년) / 연간 생산액 (억원)
-  에너지 비용 비율 (%) / 종업원 수 (인)
-
-현재 가장 큰 문제 (복수 선택):
-  □ 불량률 높음  □ 설비 자주 고장  □ 에너지 비용  □ 품질 균일성
-  □ 납기 지연    □ 인력 부족       □ 재료비 과다
-```
-
-### 4.3 진단 결과 대시보드 (Step 3)
-
-```
-┌─────────────────────────────────────────────────────┐
-│  [레이더 차트]              [벤치마크 갭 분석]       │
-│  불량률 / 가동률 /           내 회사 vs 동종업계     │
-│  에너지 / AI도입률 /         하위 35% 구간 위치      │
-│  인당생산액                                          │
-├─────────────────────────────────────────────────────┤
-│  [AI 적용 우선순위 Top3]                             │
-│  1위: 예측유지보수 — CNC 공정 / 회수 8.9개월        │
-│  2위: AI 비전검사 — 출하검사 / 회수 14개월          │
-│  3위: 에너지 최적화 — 로 공정 / 회수 12개월         │
-├─────────────────────────────────────────────────────┤
-│  [ROI 그래프]               [정부지원사업 Top5]      │
-│  3년 누적 순이익 그래프      마감일 / 지원금 / 자부담│
-│                              신청 바로가기 버튼       │
-└─────────────────────────────────────────────────────┘
-```
+상태 흐름: `page.tsx`가 `input → diagnosing → result` 3단계 상태머신으로 관리.
 
 ---
 
@@ -522,92 +322,72 @@ class SubsidyMatchingAgent:
 
 ```
 STEP 1: 기업 입력
-  업종(12개 중 선택) + 공정단계 + 설비노후도 + 기업규모 + 현재 KPI 수치
+  업종(12개 중 선택) + 기업규모 + 현재 KPI(가동률·에너지비용 등) + 현장 문제 체크
 
-STEP 2: 동종업계 벤치마크 분석
-  kiat_industry_stats 조회 → 갭 분석 → 하위 몇 % 구간 산출
+STEP 2: 지원사업 1차 매칭
+  keit_subsidies 조회 → 업종·규모 필터 → 자부담률 확보 (ROI 계산용)
 
-STEP 3: RAG 케이스 검색
-  12개 업종 × 3건+ AI 도입 케이스 DB → 유사 케이스 Top5 검색
+STEP 3: 동종업계 벤치마크 분석
+  kiat_industry_stats 조회 → 가동률(실측) 갭 계산, 불량률 등은 참고치로 별도 표시
 
-STEP 4: Claude AI 진단
-  벤치마크 + 케이스 컨텍스트 → Claude 프롬프트 → AI 우선순위 Top3 JSON
+STEP 4: 온라인 RAG 검색
+  Multi-Query → Naver/Tavily 병렬 검색 → RRF → 크롤링 → LLM Reranker → Top5
 
-STEP 5: ROI 시뮬레이션
-  업종별 ROI 파라미터 + 정부지원금 매칭 → 투자회수기간 / 3년 순이익
+STEP 5: LLM 진단
+  가동률 갭 + 현장 문제(pain point) + RAG 사례 → LLM 프롬프트 → AI 우선순위 Top3 JSON
 
-STEP 6: 지원사업 매칭
-  벡터 유사도 기반 Top5 매칭 → 마감 D-7 긴급 우선 정렬
+STEP 6: 지원사업 재매칭
+  AI 유형 반영해 재검색 → Top5 확정
 
-STEP 7: 레포트 생성
-  전체 결과 → PDF 레포트 → 다운로드 / 카카오 알림
+STEP 7: ROI 시뮬레이션
+  인건비·에너지·가동률개선 절감액 + 정부지원금 → 투자회수기간 / 3년 순이익
+
+STEP 8: 레포트 생성
+  SSE로 실시간 스트리밍 + 완료 후 PDF 다운로드 가능
 ```
 
 ---
 
 ## 6. 기술 스택 전체 요약표
 
-| 영역 | 기술 | 버전/모델 |
+| 영역 | 기술 | 비고 |
 |-----|-----|---------|
-| **언어** | Python | 3.11+ |
-| **AI LLM** | Claude claude-sonnet-4-6 (Anthropic) | claude-sonnet-4-6 |
-| **임베딩** | text-embedding-3-small (OpenAI) | - |
-| **에이전트 프레임워크** | LangGraph | 0.1+ |
-| **RAG 프레임워크** | LangChain | 0.2+ |
-| **벡터DB** | pgvector (PostgreSQL 확장) | 0.5+ |
-| **RDB** | PostgreSQL (GCP Cloud SQL) | 15 |
-| **ORM** | SQLAlchemy | 2.0+ |
-| **ETL 스케줄러** | Apache Airflow | 2.9+ |
-| **API 프레임워크** | FastAPI | 0.110+ |
-| **프론트엔드** | Next.js 14 | 14.x |
-| **차트** | Recharts | - |
-| **PDF 생성** | ReportLab / WeasyPrint | - |
-| **알림** | 카카오 알림톡 API | - |
-| **컨테이너** | Docker + docker-compose | - |
-| **CI/CD** | GitHub Actions | - |
-| **클라우드** | GCP (Cloud Run + Cloud SQL) | - |
-| **모니터링** | Sentry + GCP Cloud Monitoring | - |
+| **언어** | Python 3.11+ | |
+| **AI LLM** | Claude Sonnet 4.6 (Anthropic) / Gemini 2.5 Flash (Google) | `LLM_PROVIDER` 환경변수로 전환 |
+| **RAG** | Naver 검색 API + Tavily(선택) → RRF → LLM Reranker | 온라인 실시간 검색, 사전 구축 벡터DB 없음 |
+| **크롤링** | BeautifulSoup4 + lxml | RAG 후보 본문 추출 |
+| **ORM/DB** | SQLAlchemy 2.0 + SQLite(dev) / PostgreSQL(prod, psycopg2) | `DATABASE_URL` 환경변수로 자동 전환 |
+| **ETL** | pandas, polars, numpy, openpyxl | |
+| **스케줄러** | Apache Airflow 2.9 (DAG 3종) | docker-compose로 Airflow만 컨테이너 실행 |
+| **API 프레임워크** | FastAPI 0.111 + SSE 스트리밍 | uvicorn |
+| **프론트엔드** | Next.js 14 + Tailwind CSS + Recharts | |
+| **PDF 생성** | ReportLab | |
+| **테스트** | pytest, pytest-asyncio | |
+| **컨테이너** | Docker Compose (Airflow 스케줄러·웹서버·메타DB만) | 앱 서버(FastAPI/Next.js)는 로컬 직접 실행, 별도 컨테이너 없음 |
+
+**이번 버전에서 제외한 항목** (이전 문서에 있었으나 실제 코드에 없음 확인): LangGraph, LangChain,
+pgvector 벡터검색, OpenAI 임베딩 파이프라인, GitHub Actions CI/CD, Sentry 모니터링, 카카오
+알림톡 연동, WeasyPrint.
 
 ---
 
-## 7. 핵심 업종 12개 설계 명세
+## 7. 데이터 실측/추정 구분표 — 정직성 체크리스트
 
-### 업종별 AI 적용 매트릭스
+공모전 심사 특성상 "공공데이터를 어디까지 실제로 활용했는가"가 핵심 평가 요소이므로, 화면에
+노출되는 모든 수치의 실측/추정 여부를 코드 레벨에서 추적합니다.
 
-| KSIC | 업종 | 예측유지보수 | AI비전검사 | 에너지최적화 | 공정제어 | 품질관리AI | 로봇자동화 |
-|------|------|:-----------:|:---------:|:-----------:|:-------:|:---------:|:---------:|
-| C243 | 주조 | ○ | ● | ● | ● | ○ | - |
-| C251 | 금형 | ● | ● | - | ○ | ○ | - |
-| C259 | 소성가공 | ● | - | ○ | ● | - | ○ |
-| C289 | 용접 | - | ● | - | ● | ○ | ● |
-| C301 | 표면처리 | - | ○ | ● | ● | ○ | - |
-| C302 | 열처리 | - | - | ● | ● | ○ | - |
-| C10 | 식품 | - | ● | ○ | - | ● | - |
-| C22 | 사출성형 | ● | ● | ○ | ● | - | - |
-| C25 | 금속가공 | ● | ● | - | ○ | - | ○ |
-| C26 | 전자부품 | - | ● | - | - | ● | ○ |
-| C29 | 산업기계 | ● | - | - | ● | - | ○ |
-| C30 | 자동차부품 | - | ● | - | ● | ● | ● |
+| 지표 | 실측/추정 | 실제 사용처 |
+|---|---|---|
+| 가동률 (`avg_operating_rate`) | ✅ 실측 (KICOX) | 벤치마크 비교문, ROI 가동률개선 계산의 기준선 |
+| 국가산단 생산·수출실적 | ✅ 실측 (KICOX) | 참고 지표로 노출 |
+| 지원사업 공고 (금액/마감일) | ✅ 실측 (BIZINFO/K-Startup 실시간 API) | 지원사업 매칭 전체 |
+| 불량률, AI도입률, 인당생산액, 에너지비용비율, 인건비 | ⚠️ 추정 | 화면에 "(추정)" 라벨과 함께 참고 표시만, 우선순위·ROI 금액 계산에는 미사용 |
+| 현장 문제(pain point) | ✅ 사용자 입력 (사실) | AI 우선순위 결정의 주 동력 |
+| RAG 검색 사례 | ✅ 실시간 웹 검색 결과 (사실) | AI 우선순위 근거, ROI 기대효과 참고 |
 
-> ● = 최우선 적용 / ○ = 차순위 적용 / - = 해당 없음
-
-### 뿌리업종 특화 처리
-
-뿌리업종 6개(C243/C251/C259/C289/C301/C302)는 소진공(SBC) 뿌리업종 특화 지원사업과
-우선 매칭합니다. 일반 지원사업 매칭 전에 뿌리업종 전용 공고를 먼저 검색합니다.
-
-```python
-def get_applicable_subsidy(company_profile: dict) -> list:
-    subsidies = []
-    # 뿌리업종은 전용 지원사업 우선 검색
-    if company_profile["industry_code"] in ROOTS_INDUSTRY_CODES:
-        subsidies += search_roots_industry_subsidies(company_profile)
-    # 일반 지원사업 검색
-    subsidies += search_general_subsidies(company_profile)
-    return subsidies[:5]
-```
+이 표는 `Factory_AI_Navi_기획서.md` §SLIDE05/SLIDE10의 출처 표기와 1:1로 대응합니다.
 
 ---
 
-*작성: Factory AI Navi Team | v2.0 | 2026-06-29*
-*이 문서를 PDF로 변환하려면: `pandoc Factory_AI_Navi_기술스택.md -o Factory_AI_Navi_기술스택.md.pdf --pdf-engine=weasyprint`*
+*작성: Factory AI Navi Team | v3.0 | 2026-07-05*
+*이 문서를 PDF로 변환하려면: `pandoc Factory_AI_Navi_기술스택.md -o Factory_AI_Navi_기술스택.pdf --pdf-engine=weasyprint`*

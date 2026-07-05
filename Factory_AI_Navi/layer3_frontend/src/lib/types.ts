@@ -22,6 +22,7 @@ export interface GapEntry {
   gap_pct?: number
   unit: string
   assessment: string
+  is_estimate?: boolean
 }
 
 export interface AIPriority {
@@ -42,7 +43,7 @@ export interface ROIResult {
   net_investment: string
   labor_savings: string
   energy_savings: string
-  defect_savings: string
+  operating_uplift_savings: string
   total_annual_savings: string
   payback_months: string
   three_year_profit: string

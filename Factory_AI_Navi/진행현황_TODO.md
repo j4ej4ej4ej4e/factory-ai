@@ -22,13 +22,25 @@
 ### Layer 1 — 데이터 수집 & ETL
 
 - `layer1_etl/models/` — SQLAlchemy ORM 모델 3종 (industry_stats, subsidies, benchmark)
-- `layer1_etl/collectors/` — KIAT, KEIT, NTIS, KSNPC, KOITA 수집기
+- `layer1_etl/collectors/` — 아래 "실데이터 연동 현황" 참고
 - `layer1_etl/transformers/` — 표준화, 단위변환, 결측처리
 - `layer1_etl/loaders/` — PostgreSQL/SQLite 자동 전환
 - `layer1_etl/dags/` — Airflow DAG 3종 (주간/일간/정리)
 - `layer1_etl/config.py` — `DATABASE_URL` 환경변수 우선 처리 (SQLite/PostgreSQL 자동 전환)
-- `scripts/seed_db.py` — 12업종 × 2규모 = 24행 Mock 벤치마크 데이터 + 지원사업 5건 적재 완료
-- `dev_local.db` — SQLite 로컬 개발 DB (시드 데이터 포함)
+- `scripts/seed_db.py` — 12업종 × 2규모 = 24행 벤치마크 데이터 + 지원사업 적재
+- `dev_local.db` — SQLite 로컬 개발 DB
+
+**실데이터 연동 현황 (2026-07-05 기준)**
+
+| 수집기 | 상태 | 비고 |
+|---|---|---|
+| KSNPC (KICOX 가동률·생산·수출) | ✅ 실데이터 (v2.0) | odcloud.kr 연동, 업종 대분류 매핑, 2026-03 기준 |
+| BIZINFO (기업마당) | ✅ 실데이터 | 실시간 공고 API, AI/제조 키워드 필터링 |
+| K-Startup (창업진흥원) | ✅ 실데이터 | 실시간 공고 API |
+| KEIT | ❌ 제외 | mock만 존재, 실크롤링 미구현 — BIZINFO/K-Startup으로 대체 |
+| NTIS | ⚠️ 키 검증만 | API 키·XML 응답 확인, 파싱 로직(`ntis_collector.py`) 미구현 |
+| KIAT / KOITA (PDF) | 🔍 확인 후 보류 | 필요한 업종별 세분류 데이터 없음 확인, 시장성 근거로만 인용 |
+| KOSIS 광업제조업조사 | 🔍 확인 후 폐기 | 실제 API 존재 확인했으나 2019년 데이터까지만 존재 — 최신성 미충족 |
 
 **확정 업종 12개 × 규모 2개 = 24행 벤치마크**
 
@@ -44,6 +56,21 @@
 - `layer2_ai/agents/diagnostic.py` — 공정 진단 에이전트 (Step A: 벤치마크 갭 / Step B: AI 우선순위 / Step C: ROI)
 - `layer2_ai/rag/retriever.py` — 온라인 RAG (Naver Multi-Query → RRF → Gemini Reranker)
 - `layer2_ai/rag/search_clients.py` — 네이버 검색 API 클라이언트
+
+**⚠️ 미해결: Layer 2 실행 전제조건** — `.env`의 `GEMINI_API_KEY`, `NAVER_CLIENT_ID/SECRET`이 아직
+플레이스홀더 상태. 키 입력 전까지 진단/RAG/ROI 파이프라인이 실제로 동작하지 않음 (Naver는 조용히
+빈 결과 반환, Gemini는 호출 시 에러). 데모 전 최우선으로 키 발급 필요.
+
+**2026-07-05 로직 수정 — 불량률 추정치 의존도 제거**
+- 문제: 불량률은 업종별 실측 공공데이터가 전혀 없는데(KIAT/KOITA/KOSIS 광업제조업조사 모두 확인함),
+  기존 로직은 이 추정치로 ①AI 우선순위 순위 결정, ②ROI 금액(`defect_savings`) 계산까지 했음
+- 수정: `benchmark_tool.py`(우선순위 트리거에서 불량률 제거, `is_estimate` 플래그 추가) /
+  `diagnostic.py`(pain_point가 우선순위를 주도하도록 순서 변경, 프롬프트에 실측·추정 구분 명시) /
+  `constants.py`+`roi_calculator.py`(`defect_improvement_pp` → `operating_rate_gain_pp`로 교체,
+  ROI의 세 번째 항목을 "가동률 개선에 따른 생산증대"로 재계산 — 기준선은 KICOX 실측 가동률)
+- 연쇄 반영: `layer3_api/services/report_generator.py`(PDF 갭 테이블 추정치 라벨),
+  `layer3_frontend`(`types.ts`/`BenchmarkRadar.tsx`/`LandingPage.tsx` 필드·문구 동기화),
+  `Factory_AI_Navi_기획서.md` v2.1(STEP①②③ 문구, 데모 시나리오, 기대효과 표 전부 동기화)
 
 **RAG 파이프라인 실증 (2026-06-30)**
 
@@ -101,10 +128,16 @@
 
 ### D-1 / 7월 5일 — 제출 준비 ← **오늘**
 
+- [x] KICOX(가동률·생산·수출) 실데이터 연동 (`ksnpc_collector.py` v2.0)
+- [x] BIZINFO·K-Startup 실시간 지원사업 API 연동, KEIT mock 제거
+- [x] `KeitSubsidy.to_dict()` 매칭 필터 누락 버그 수정
+- [x] 불량률 추정치를 AI 우선순위·ROI 금액 계산에서 제거, 가동률 실측 기반으로 전환
+- [x] 기획서 v2.1 — 위 로직 변경 반영, 과장 수치 톤다운
+- [ ] **`.env`에 `GEMINI_API_KEY`, `NAVER_CLIENT_ID/SECRET` 실키 입력** (현재 플레이스홀더 — 최우선)
 - [ ] 서비스 데모 영상 또는 스크린샷 캡처 (공모전 제출용)
 - [ ] `기획서.pdf` 최종본 완성
 - [ ] `README.md` 실행 가이드 작성
-- [ ] 엔드투엔드 최종 확인 (백엔드 + 프론트 연동)
+- [ ] 엔드투엔드 최종 확인 (백엔드 + 프론트 연동, 실키 입력 후)
 
 ### D-0 / 7월 6일 — 접수 마감
 
@@ -154,3 +187,4 @@ npm run dev
 | 2026-06-29 | v2.0 | Layer 2 AI 엔진 완성, Gemini 통합, RAG 파이프라인 구현 |
 | 2026-06-30 | v3.0 | Layer 3 FastAPI + Next.js 완성, 웹 서비스 실행 완료 |
 | 2026-07-05 | v3.1 | D-1 기준 전체 현황 업데이트, 완료 항목 정리 |
+| 2026-07-05 | v3.2 | KICOX/BIZINFO/K-Startup 실데이터 연동, KEIT 제거, 불량률 추정치 의존도 제거(ROI·우선순위 로직을 가동률 실측 기반으로 전환), 기획서 v2.1 동기화 |

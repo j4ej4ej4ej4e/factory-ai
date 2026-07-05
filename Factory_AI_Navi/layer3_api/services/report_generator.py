@@ -192,8 +192,11 @@ def _gap_table(report: dict, s: dict) -> list:
         unit = g.get("unit", "")
         gap_val = g.get("gap_pp") or g.get("gap_pct")
         gap_str = f"{gap_val:+.2f}{unit}" if gap_val is not None else "-"
+        label = g.get("label", key)
+        if g.get("is_estimate"):
+            label += " (추정)"
         data.append([
-            g.get("label", key),
+            label,
             f"{g.get('company', '-')}{unit}",
             f"{g.get('peer_avg', '-')}{unit}",
             gap_str,

@@ -110,7 +110,7 @@ export default function LandingPage({ onStart }: Props) {
           <p className="text-gray-500 text-center text-sm mb-10">전문 컨설턴트의 분석을 AI가 대신합니다</p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {[
-              { icon: '📊', title: '동종업계 벤치마크 갭 분석', desc: 'KIAT 업종 통계 기반 불량률·가동률·인당생산액을 업종 평균과 비교합니다.' },
+              { icon: '📊', title: '동종업계 벤치마크 갭 분석', desc: '한국산업단지공단(KICOX) 실측 가동률을 업종 평균과 비교하고, 불량률·인당생산액은 참고 추정치로 함께 제공합니다.' },
               { icon: '🎯', title: 'AI 도입 우선순위 Top 3', desc: '귀사 상황에 맞는 예측유지보수·비전검사·공정제어 등 최적 솔루션을 추천합니다.' },
               { icon: '💰', title: 'ROI 시뮬레이션', desc: '투자 비용 대비 연간 절감액·투자 회수기간·3년 순이익을 계산합니다.' },
               { icon: '🏛️', title: '정부지원사업 매칭', desc: 'AI바우처·스마트공장·뿌리업종 특화 지원사업 중 신청 가능한 것만 추려드립니다.' },
