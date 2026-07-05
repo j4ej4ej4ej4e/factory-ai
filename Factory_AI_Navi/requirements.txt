@@ -1,53 +1,22 @@
-# Factory AI Navi — Layer 1 ETL 의존성 패키지
-# pip install -r requirements.txt
-
-# ── 데이터 처리 ──────────────────────────────────────────────────
 pandas>=2.1.0
-polars>=0.20.0          # 대용량 데이터 고속 처리 (선택)
+polars>=0.20.0
 numpy>=1.26.0
-openpyxl>=3.1.0         # Excel 파일 읽기
-
-# ── 환경변수 관리 ────────────────────────────────────────────────
+openpyxl>=3.1.0
 python-dotenv>=1.0.0
-
-# ── HTTP 클라이언트 ──────────────────────────────────────────────
 requests>=2.31.0
 urllib3>=2.0.0
-httpx>=0.26.0           # 비동기 HTTP (Layer 3 FastAPI 연동)
-
-# ── HTML 파싱 (KEIT 크롤링) ──────────────────────────────────────
+httpx>=0.26.0
 beautifulsoup4>=4.12.0
 lxml>=5.0.0
-
-# ── DB — SQLAlchemy + PostgreSQL ─────────────────────────────────
 sqlalchemy>=2.0.0
-psycopg2-binary>=2.9.0  # PostgreSQL 드라이버 (AWS RDS)
-# pgvector>=0.2.4        # pgvector 확장 (Layer 2 RAG 구현 시 활성화)
-
-# ── 스케줄링 (Airflow) ───────────────────────────────────────────
-# apache-airflow>=2.9.1  # Docker 환경: docker-compose up으로 자동 설치됨
-#                        # 로컬 직접 실행 시: pip install apache-airflow>=2.9.1
-
-# ── Layer 2 — AI 엔진 ────────────────────────────────────────────
-anthropic>=0.25.0          # Claude API (공정 진단 LLM)
-openai>=1.30.0             # OpenAI 임베딩 API (text-embedding-3-small)
-
-# ── Layer 2 — 온라인 RAG 검색 ────────────────────────────────────
-tavily-python>=0.3.0       # Tavily Search API (선택 — 없으면 Naver만 사용)
-
-# ── Layer 2 — 웹 크롤링 (이미 Layer 1에 있음, 확인용) ───────────
-# beautifulsoup4>=4.12.0  ← Layer 1에서 이미 설치됨
-# lxml>=5.0.0             ← Layer 1에서 이미 설치됨
-
-# ── Layer 2 — Gemini (LLM_PROVIDER=gemini 일 때) ─────────────────
-google-genai>=1.0.0              # 신규 Gemini SDK (google-generativeai 대체)
-
-# ── Layer 3 — FastAPI API 서버 ───────────────────────────────────
-fastapi>=0.111.0           # REST API + SSE 스트리밍
-uvicorn[standard]>=0.29.0  # ASGI 서버
-python-multipart>=0.0.9    # Form 데이터 파싱
-reportlab>=4.0.0           # PDF 생성 (weasyprint 대비 경량)
-
-# ── 테스트 ───────────────────────────────────────────────────────
+psycopg2-binary>=2.9.0
+anthropic>=0.25.0
+openai>=1.30.0
+tavily-python>=0.3.0
+google-genai>=1.0.0
+fastapi>=0.111.0
+uvicorn[standard]>=0.29.0
+python-multipart>=0.0.9
+reportlab>=4.0.0
 pytest>=8.0.0
 pytest-asyncio>=0.23.0

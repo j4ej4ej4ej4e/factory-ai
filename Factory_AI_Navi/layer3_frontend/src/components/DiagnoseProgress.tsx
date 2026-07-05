@@ -67,7 +67,15 @@ export default function DiagnoseProgress({ profile, onComplete, onError }: Props
       let buffer = ''
 
       while (true) {
-        const { done, value } = await reader.read()
+        let done: boolean, value: Uint8Array | undefined
+        try {
+          const result = await reader.read()
+          done = result.done
+          value = result.value
+        } catch (e: unknown) {
+          if ((e as Error).name === 'AbortError') return
+          throw e
+        }
         if (done) break
 
         buffer += decoder.decode(value, { stream: true })
