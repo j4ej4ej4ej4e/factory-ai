@@ -103,6 +103,11 @@ class KiatIndustryStat(Base):
     robot_adoption_rate    = Column(Float, nullable=True, comment="산업용 로봇 도입률 (%)")
     avg_robot_roi_months   = Column(Float, nullable=True, comment="로봇 도입 평균 회수 기간 (개월)")
 
+    # ── 산단공(KSNPC) 국가산업단지 업종동향 ───────
+    ksnpc_production_billion_krw = Column(Float, nullable=True, comment="국가산단 업종별 생산실적 (억원, 월)")
+    ksnpc_export_million_usd     = Column(Float, nullable=True, comment="국가산단 업종별 수출실적 (백만달러, 월)")
+    ksnpc_reference_month        = Column(String(10), nullable=True, comment="산단공 데이터 기준월 (YYYY-MM)")
+
     # ── 메타 ─────────────────────────────────────
     data_source   = Column(String(50), nullable=True, comment="데이터 출처")
     raw_file_path = Column(Text,       nullable=True, comment="원본 파일 경로 (감사용)")
@@ -129,6 +134,9 @@ class KiatIndustryStat(Base):
             "avg_energy_cost_ratio":      self.avg_energy_cost_ratio,
             "robot_adoption_rate":        self.robot_adoption_rate,
             "avg_robot_roi_months":       self.avg_robot_roi_months,
+            "ksnpc_production_billion_krw": self.ksnpc_production_billion_krw,
+            "ksnpc_export_million_usd":     self.ksnpc_export_million_usd,
+            "ksnpc_reference_month":        self.ksnpc_reference_month,
             "data_source":                self.data_source,
         }
 

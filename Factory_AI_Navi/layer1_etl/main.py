@@ -34,6 +34,8 @@ from layer1_etl.collectors.keit_collector import KeitCollector
 from layer1_etl.collectors.ntis_collector import NtisCollector
 from layer1_etl.collectors.ksnpc_collector import KsnpcCollector
 from layer1_etl.collectors.koita_collector import KoitaCollector
+from layer1_etl.collectors.bizinfo_collector import BizinfoCollector
+from layer1_etl.collectors.kstartup_collector import KstartupCollector
 from layer1_etl.transformers.industry_standardizer import IndustryStandardizer
 from layer1_etl.transformers.unit_converter import UnitConverter
 from layer1_etl.transformers.missing_handler import MissingHandler
@@ -91,15 +93,19 @@ def run_industry_stats_pipeline(loader: PostgresLoader) -> dict:
 
 def run_subsidies_pipeline(loader: PostgresLoader) -> dict:
     """
-    지원사업 수집 파이프라인 (KEIT + NTIS 통합).
+    지원사업 수집 파이프라인 (BIZINFO + KSTARTUP 통합).
+
+    KEIT는 실제 크롤링 미구현(mock만 존재)이라 제외, NTIS는 신청 마감일이
+    없는 R&D 과제 이력 데이터라 지원사업 매칭 용도에 부적합해 제외했다.
+    두 API 모두 실시간 신청 가능 공고(신청기간 포함)를 제공하는 실데이터다.
 
     Returns
     -------
     dict : {'loaded': int, 'errors': int}
     """
     collectors = [
-        ("KEIT", KeitCollector()),
-        ("NTIS", NtisCollector()),
+        ("BIZINFO", BizinfoCollector()),
+        ("KSTARTUP", KstartupCollector()),
     ]
 
     total_loaded = 0
@@ -209,7 +215,7 @@ def main():
     )
     parser.add_argument(
         "--source",
-        choices=["all", "kiat", "keit", "ntis", "ksnpc", "koita"],
+        choices=["all", "kiat", "keit", "ntis", "ksnpc", "koita", "bizinfo", "kstartup"],
         default="all",
         help="실행할 수집기 (기본: all)",
     )
@@ -236,11 +242,13 @@ def main():
         loader.init_tables()
 
         collector_map = {
-            "kiat":  (KiatCollector,  "KIAT",  loader.load_industry_stats),
-            "keit":  (KeitCollector,  "KEIT",  loader.load_subsidies),
-            "ntis":  (NtisCollector,  "NTIS",  loader.load_subsidies),
-            "ksnpc": (KsnpcCollector, "KSNPC", loader.load_industry_stats),
-            "koita": (KoitaCollector, "KOITA", loader.load_industry_stats),
+            "kiat":    (KiatCollector,    "KIAT",    loader.load_industry_stats),
+            "keit":    (KeitCollector,    "KEIT",    loader.load_subsidies),
+            "ntis":    (NtisCollector,    "NTIS",    loader.load_subsidies),
+            "ksnpc":   (KsnpcCollector,   "KSNPC",   loader.load_industry_stats),
+            "koita":   (KoitaCollector,   "KOITA",   loader.load_industry_stats),
+            "bizinfo": (BizinfoCollector,   "BIZINFO",  loader.load_subsidies),
+            "kstartup": (KstartupCollector, "KSTARTUP", loader.load_subsidies),
         }
 
         CollectorClass, source, load_fn = collector_map[args.source]

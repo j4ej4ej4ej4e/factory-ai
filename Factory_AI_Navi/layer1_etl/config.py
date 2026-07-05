@@ -65,16 +65,28 @@ PUBLIC_DATA_SERVICE_KEY: str = os.getenv(
 )
 
 # ── 2-2. 국가R&D 과제검색 API (NTIS) ────────────
-# 발급: https://www.ntis.go.kr → API 신청
+# 발급: https://www.ntis.go.kr → API 신청 (국가R&D 과제검색 서비스(전체용))
 # .env: NTIS_API_KEY=your_ntis_key
 NTIS_API_KEY: str = os.getenv("NTIS_API_KEY", "PLACEHOLDER_NTIS_API_KEY")
-NTIS_BASE_URL: str = "https://apis.data.go.kr/B552735/rdTrnsInfo/getRdTrnsInfo"
+NTIS_BASE_URL: str = "https://www.ntis.go.kr/rndopen/openApi/public_project"
 
-# ── 2-3. 한국산업단지공단 (KSNPC) Open API ───────
-# 발급: https://www.kicox.or.kr → 데이터 서비스
-# .env: KSNPC_API_KEY=your_ksnpc_key
+# ── 2-3. 한국산업단지공단 (KSNPC) 국가산업단지 산업동향정보 ───────
+# 발급: https://www.data.go.kr 활용신청 (odcloud.kr 파일데이터 API)
+# .env: KSNPC_API_KEY=your_ksnpc_key (일반 인증키)
 KSNPC_API_KEY: str = os.getenv("KSNPC_API_KEY", "PLACEHOLDER_KSNPC_API_KEY")
-KSNPC_BASE_URL: str = "https://www.kicox.or.kr/openApi"   # 확인 후 수정
+KSNPC_BASE_URL: str = "https://api.odcloud.kr/api"
+
+# ── 2-3-1. 기업마당(BIZINFO) 지원사업정보 API ─────
+# 발급: https://www.bizinfo.go.kr → Open API → 사용신청
+# .env: BIZINFO_API_KEY=your_bizinfo_key
+BIZINFO_API_KEY: str = os.getenv("BIZINFO_API_KEY", "PLACEHOLDER_BIZINFO_API_KEY")
+BIZINFO_BASE_URL: str = "https://www.bizinfo.go.kr/uss/rss/bizinfoApi.do"
+
+# ── 2-3-2. 창업진흥원 K-Startup 사업공고 API ───────
+# 발급: https://www.data.go.kr 활용신청 (B552735/kisedKstartupService01)
+# .env: KSTARTUP_API_KEY=your_kstartup_key (파라미터명은 ServiceKey — 대문자 S 주의)
+KSTARTUP_API_KEY: str = os.getenv("KSTARTUP_API_KEY", "PLACEHOLDER_KSTARTUP_API_KEY")
+KSTARTUP_BASE_URL: str = "https://apis.data.go.kr/B552735/kisedKstartupService01"
 
 # ── 2-4. 특허청 Open API ─────────────────────────
 # 발급: https://openapi.kipris.or.kr → 회원가입 후 발급
