@@ -67,7 +67,7 @@
   업종 선택                   동종업계 비교                 진단 레포트
   (12개 핵심 업종)     →      (공공데이터 기반)     →       PDF 다운로드
   공정 정보 입력              AI 도입 우선순위 3개          정부지원 매칭
-  기업 규모 입력              ROI 자동 계산                 카카오 알림
+  기업 규모 입력              ROI 자동 계산                 (카카오 알림은 Pro 플랜 로드맵, 미구현)
   (소기업/중기업)             지원사업 자동 매칭
 ```
 
@@ -204,9 +204,9 @@ STEP ③ ROI 시뮬레이션 (공공데이터 기반 자동계산)
 ```
 
 **사용 AI 기술**:
-- LLM: Claude claude-sonnet-4-6 (Anthropic)
-- 에이전트: LangGraph 멀티 에이전트
-- 검색: pgvector + BM25 하이브리드 RAG
+- LLM: Claude Sonnet 4.6 (Anthropic) / Gemini 2.5 Flash (Google) — 환경변수로 전환
+- 에이전트: 순수 Python 오케스트레이터 (지원사업 매칭 → 벤치마크 분석 → RAG+LLM 우선순위 → ROI 계산 순차 실행)
+- 검색: 온라인 RAG — Multi-Query(LLM) → Naver+Tavily 병렬 검색 → RRF 합산 → 본문 크롤링 → LLM Reranker (사전 구축 벡터DB 없이 매 진단 시점 실시간 검색)
 
 ---
 
