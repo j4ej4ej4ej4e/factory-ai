@@ -30,6 +30,28 @@ export default function DiagnoseProgress({ profile, onComplete, onError }: Props
   const [totalPct, setTotalPct] = useState(0)
   const accRef = useRef<Partial<DiagnosisResult>>({})
 
+  // 실제 진행률(targetPct)과 화면에 보여줄 진행률(totalPct)을 분리해서
+  // 부드럽게 채워지는 것처럼 보이게 함 — 백엔드 응답이 몰아서 빨리 오면
+  // (예: LLM 실패로 폴백이 즉시 처리되는 경우) 게이지가 순간이동하는 걸 방지
+  const targetPctRef = useRef(0)
+  const displayPctRef = useRef(0)
+
+  useEffect(() => {
+    let raf: number
+    const tick = () => {
+      const diff = targetPctRef.current - displayPctRef.current
+      if (Math.abs(diff) > 0.4) {
+        displayPctRef.current += diff * 0.12
+      } else {
+        displayPctRef.current = targetPctRef.current
+      }
+      setTotalPct(Math.round(displayPctRef.current))
+      raf = requestAnimationFrame(tick)
+    }
+    raf = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(raf)
+  }, [])
+
   const addLog = (msg: string) =>
     setLogs(prev => [...prev.slice(-19), `${new Date().toLocaleTimeString()} ${msg}`])
 
@@ -96,7 +118,7 @@ export default function DiagnoseProgress({ profile, onComplete, onError }: Props
           if (event === 'progress') {
             const { step, message, pct } = data as { step: string; message: string; pct: number }
             setStep(step, { status: 'running', message, pct })
-            setTotalPct(pct)
+            targetPctRef.current = pct
             addLog(message)
 
           } else if (event === 'step_result') {
@@ -110,6 +132,8 @@ export default function DiagnoseProgress({ profile, onComplete, onError }: Props
               accRef.current.peer_data = d.peer_data as Record<string, unknown>
               accRef.current.gap_analysis = d.gap_analysis as DiagnosisResult['gap_analysis']
               accRef.current.improvement_priorities = d.improvement_priorities as string[]
+              accRef.current.industry_weather = d.industry_weather as DiagnosisResult['industry_weather']
+              accRef.current.peer_ranking = d.peer_ranking as DiagnosisResult['peer_ranking']
             } else if (step === 'step_b') {
               const d = stepData as Record<string, unknown>
               accRef.current.ai_priorities = d.ai_priorities as AIPriority[]
@@ -121,8 +145,10 @@ export default function DiagnoseProgress({ profile, onComplete, onError }: Props
 
           } else if (event === 'complete') {
             const { report_id } = data as { report_id: string }
-            setTotalPct(100)
+            targetPctRef.current = 100
             addLog('진단 완료!')
+            // 게이지가 실제로 100%까지 차오르는 걸 눈으로 볼 시간을 준 뒤 화면 전환
+            await new Promise(resolve => setTimeout(resolve, 500))
             onComplete({ ...accRef.current, report_id, company: profile } as DiagnosisResult & { report_id: string })
 
           } else if (event === 'error') {
@@ -146,7 +172,7 @@ export default function DiagnoseProgress({ profile, onComplete, onError }: Props
         </div>
         <div className="w-full bg-gray-100 rounded-full h-3">
           <div
-            className="bg-brand h-3 rounded-full transition-all duration-700"
+            className="bg-brand h-3 rounded-full transition-[width] duration-100 ease-linear"
             style={{ width: `${totalPct}%` }}
           />
         </div>
