@@ -58,9 +58,11 @@
 - `layer2_ai/rag/retriever.py` — 온라인 RAG (Naver Multi-Query → RRF → Gemini Reranker)
 - `layer2_ai/rag/search_clients.py` — 네이버 검색 API 클라이언트
 
-**⚠️ 미해결: Layer 2 실행 전제조건** — `.env`의 `GEMINI_API_KEY`, `NAVER_CLIENT_ID/SECRET`이 아직
-플레이스홀더 상태. 키 입력 전까지 진단/RAG/ROI 파이프라인이 실제로 동작하지 않음 (Naver는 조용히
-빈 결과 반환, Gemini는 호출 시 에러). 데모 전 최우선으로 키 발급 필요.
+**✅ 해결됨 (2026-07-06): Layer 2 실행 전제조건** — `GEMINI_API_KEY`, `NAVER_CLIENT_ID/SECRET`
+실키 입력 완료. `/api/v1/diagnose` 전체 파이프라인 실제 실행 검증함 — 벤치마크 갭(가동률 60%
+vs 동종평균 78%) → RAG 실검색(딜로이트 2022 인용 등 실제 블로그·기사 5건) → Gemini가 그 근거로
+AI 우선순위 도출 → ROI 계산까지 SSE로 끝까지 완주. 불량률은 LLM이 스스로 "참고 추정치"로
+구분해서 인용함(프롬프트 수정이 의도대로 작동).
 
 **2026-07-05 로직 수정 — 불량률 추정치 의존도 제거**
 - 문제: 불량률은 업종별 실측 공공데이터가 전혀 없는데(KIAT/KOITA/KOSIS 광업제조업조사 모두 확인함),
@@ -151,8 +153,8 @@
 
 ### D-0 / 7월 6일 — 접수 마감 ← **오늘**
 
-- [ ] **`.env`에 `GEMINI_API_KEY`, `NAVER_CLIENT_ID/SECRET` 실키 입력** (현재 플레이스홀더 — 최우선)
-- [ ] 엔드투엔드 최종 확인 (백엔드 + 프론트 연동, 실키 입력 후)
+- [x] `.env`에 `GEMINI_API_KEY`, `NAVER_CLIENT_ID/SECRET` 실키 입력
+- [x] 엔드투엔드 최종 확인 — `/api/v1/diagnose` 전체 파이프라인 실키로 완주 검증
 - [ ] 서비스 데모 영상 또는 스크린샷 캡처 (공모전 제출용)
 - [ ] `기획서.pdf` 최종본 완성 (md → pdf 변환)
 - [ ] `README.md` 실행 가이드 작성
