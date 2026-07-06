@@ -349,6 +349,8 @@ JSON으로만 출력 (설명·마크다운 없이):
         except Exception as e:
             logger.error("[RAG] Reranker 실패: %s → RRF 순서 그대로 반환", e)
             for doc in candidates[:RERANK_TOP_N]:
-                doc.setdefault("relevance_score", 0)
-                doc.setdefault("relevance_reason", "reranker 오류")
+                # None으로 두면 프론트에서 "관련도 0.0"(실제 낮은 점수처럼 보임) 대신
+                # "#1" 순번으로 표시됨 — 리랭커 실패와 "진짜 0점"을 구분하기 위함
+                doc.setdefault("relevance_score", None)
+                doc.setdefault("relevance_reason", "리랭커 일시 오류 — RRF 검색 순서로 표시")
             return candidates[:RERANK_TOP_N]

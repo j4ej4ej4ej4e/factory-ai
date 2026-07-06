@@ -75,6 +75,10 @@ class SubsidyTool:
                 continue
             s["match_score"] = score
             s["is_urgent"] = urgency_map.get(s["subsidy_id"], False)
+            # 업종이 명시적으로 태깅된 공고인지 여부 — "마감 캘린더"에서 업종전용/
+            # 제조업 전체 대상 공고를 구분 표시하는 데 사용 (전체 공고의 약 79%는
+            # 업종 제한이 없는 일반 공고라 태깅 자체가 없는 게 정상)
+            s["is_industry_specific"] = bool((s.get("target_industry_codes") or "").strip())
             matched.append(s)
 
         # 정렬: 긴급 우선 → 매칭 점수 내림차순 → 마감일 오름차순

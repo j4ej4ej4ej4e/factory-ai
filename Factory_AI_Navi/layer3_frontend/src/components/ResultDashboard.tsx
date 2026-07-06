@@ -6,6 +6,7 @@ import IndustryWeather from './IndustryWeather'
 import PeerRanking from './PeerRanking'
 import ROIBarChart from './ROIBarChart'
 import ROISimulatorPanel from './ROISimulatorPanel'
+import SubsidyCalendar from './SubsidyCalendar'
 import SubsidyTable from './SubsidyTable'
 
 interface Props {
@@ -171,8 +172,13 @@ export default function ResultDashboard({ result, onReset }: Props) {
 
       {/* 섹션 4: 지원사업 */}
       <div className="card">
-        <h3 className="section-title">🏛️ 추천 정부지원사업</h3>
-        <SubsidyTable subsidies={subsidies ?? []} />
+        <h3 className="section-title">📅 지원금 마감 캘린더</h3>
+        <SubsidyCalendar subsidies={subsidies ?? []} />
+      </div>
+
+      <div className="card">
+        <h3 className="section-title">🏛️ 추천 정부지원사업 Top5</h3>
+        <SubsidyTable subsidies={(subsidies ?? []).slice(0, 5)} />
       </div>
 
       {/* 섹션 5: RAG 출처 */}

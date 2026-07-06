@@ -63,6 +63,8 @@ export interface Subsidy {
   urgency_label?: string
   support_amount_label?: string
   is_roots_priority?: boolean
+  is_industry_specific?: boolean
+  apply_url?: string
 }
 
 export interface RAGSource {

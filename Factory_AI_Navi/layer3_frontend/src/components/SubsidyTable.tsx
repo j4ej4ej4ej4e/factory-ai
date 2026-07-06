@@ -47,6 +47,11 @@ export default function SubsidyTable({ subsidies }: Props) {
                       뿌리업종 우선
                     </span>
                   )}
+                  <span className={`text-xs px-2 py-0.5 rounded-full ${
+                    s.is_industry_specific ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-500'
+                  }`}>
+                    {s.is_industry_specific ? '업종전용' : '제조업 전체'}
+                  </span>
                 </div>
               </td>
               <td className="px-4 py-3 text-right font-medium text-brand">
