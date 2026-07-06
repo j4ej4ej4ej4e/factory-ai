@@ -13,6 +13,7 @@ Claude / Gemini 공통 LLM 래퍼.
 """
 
 import os
+import time
 from layer2_ai.config import (
     ANTHROPIC_API_KEY,
     CLAUDE_MODEL,
@@ -23,10 +24,16 @@ LLM_PROVIDER: str = os.getenv("LLM_PROVIDER", "claude").lower()
 GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
 GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
 
+_MAX_RETRIES = 2  # 503(일시 과부하) 전용 재시도 횟수
+
 
 def call_llm(user: str, system: str = "", max_tokens: int = 1000) -> str:
     """
     LLM_PROVIDER에 따라 Claude 또는 Gemini 호출.
+
+    503(모델 일시 과부하)은 몇 초 내로 풀리는 경우가 많아 짧게 재시도한다.
+    429(할당량 초과)는 재시도해도 수십 초~하루 단위로 안 풀리므로 바로
+    포기하고 예외를 던져 호출부의 규칙 기반 폴백으로 넘어가게 한다.
 
     Parameters
     ----------
@@ -38,9 +45,26 @@ def call_llm(user: str, system: str = "", max_tokens: int = 1000) -> str:
     -------
     str : LLM 응답 텍스트
     """
-    if LLM_PROVIDER == "gemini":
-        return _call_gemini(user, system, max_tokens)
-    return _call_claude(user, system, max_tokens)
+    last_err: Exception | None = None
+    for attempt in range(_MAX_RETRIES + 1):
+        try:
+            if LLM_PROVIDER == "gemini":
+                return _call_gemini(user, system, max_tokens)
+            return _call_claude(user, system, max_tokens)
+        except Exception as e:
+            last_err = e
+            msg = str(e)
+            if "429" in msg or "RESOURCE_EXHAUSTED" in msg:
+                raise  # 할당량 초과 — 재시도 무의미, 즉시 폴백으로
+            if attempt < _MAX_RETRIES:
+                wait = 1.5 * (attempt + 1)
+                logger.warning(
+                    "[LLM] 일시 오류 → %.1f초 후 재시도 (%d/%d): %s",
+                    wait, attempt + 1, _MAX_RETRIES, msg[:80],
+                )
+                time.sleep(wait)
+                continue
+    raise last_err  # 재시도 다 소진
 
 
 def _call_claude(user: str, system: str, max_tokens: int) -> str:
