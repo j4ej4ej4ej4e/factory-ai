@@ -1,10 +1,26 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import type { Subsidy } from '@/lib/types'
+import type { CompanyProfile, Subsidy } from '@/lib/types'
 
 interface Props {
   subsidies: Subsidy[]
+  company: CompanyProfile
+}
+
+interface EligibilityItem {
+  requirement: string
+  status: string
+  note: string
+}
+interface EligibilityResult {
+  items: EligibilityItem[]
+  overall: string
+  overall_note: string
+}
+interface EligibilityState {
+  loading: boolean
+  data: EligibilityResult | null
 }
 
 const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토']
@@ -22,12 +38,19 @@ function isSameMonth(dateStr: string | undefined, year: number, month: number): 
   return !isNaN(d.getTime()) && d.getFullYear() === year && d.getMonth() === month
 }
 
-export default function SubsidyCalendar({ subsidies }: Props) {
+const STATUS_STYLE: Record<string, string> = {
+  '충족':   'bg-green-100 text-green-700',
+  '확인필요': 'bg-yellow-100 text-yellow-700',
+  '미충족': 'bg-red-100 text-red-700',
+}
+
+export default function SubsidyCalendar({ subsidies, company }: Props) {
   const today = useMemo(() => new Date(), [])
   const year = today.getFullYear()
   const month = today.getMonth() // 0-indexed
 
   const [selectedDay, setSelectedDay] = useState<number | null>(today.getDate())
+  const [eligibility, setEligibility] = useState<Record<number, EligibilityState>>({})
 
   const byDay = useMemo(() => {
     const map = new Map<number, Subsidy[]>()
@@ -50,6 +73,27 @@ export default function SubsidyCalendar({ subsidies }: Props) {
   while (cells.length % 7 !== 0) cells.push(null)
 
   const selectedItems = selectedDay != null ? (byDay.get(selectedDay) ?? []) : []
+
+  async function checkEligibility(idx: number, s: Subsidy) {
+    setEligibility(prev => ({ ...prev, [idx]: { loading: true, data: prev[idx]?.data ?? null } }))
+    try {
+      const res = await fetch('/api/v1/subsidy-eligibility', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          program_name:  s.program_name,
+          description:   s.description ?? '',
+          industry_code: company.industry_code,
+          company_size:  company.company_size,
+          headcount:     company.headcount,
+        }),
+      })
+      const data = await res.json()
+      setEligibility(prev => ({ ...prev, [idx]: { loading: false, data } }))
+    } catch {
+      setEligibility(prev => ({ ...prev, [idx]: { loading: false, data: null } }))
+    }
+  }
 
   if (!subsidies.length) {
     return (
@@ -118,23 +162,55 @@ export default function SubsidyCalendar({ subsidies }: Props) {
           <div className="text-sm text-gray-400">이 날짜에 마감되는 지원사업이 없습니다.</div>
         )}
         <div className="space-y-2">
-          {selectedItems.map((s, i) => (
-            <a
-              key={i}
-              href={s.apply_url || undefined}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center justify-between gap-3 p-2.5 rounded-lg border border-gray-100 hover:border-brand/40 hover:bg-blue-50/30 transition-colors"
-            >
-              <div className="flex items-center gap-2 min-w-0">
-                <span className={`w-2 h-2 rounded-full shrink-0 ${s.is_industry_specific ? 'bg-brand' : 'bg-gray-400'}`} />
-                <span className="text-sm text-gray-800 truncate">{s.program_name}</span>
+          {selectedItems.map((s, i) => {
+            const elig = eligibility[i]
+            return (
+              <div key={i} className="rounded-lg border border-gray-100 hover:border-brand/40 transition-colors">
+                <div className="flex items-center justify-between gap-3 p-2.5">
+                  <a
+                    href={s.apply_url || undefined}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-2 min-w-0 flex-1 hover:underline"
+                  >
+                    <span className={`w-2 h-2 rounded-full shrink-0 ${s.is_industry_specific ? 'bg-brand' : 'bg-gray-400'}`} />
+                    <span className="text-sm text-gray-800 truncate">{s.program_name}</span>
+                  </a>
+                  <span className="text-xs text-brand font-medium shrink-0">
+                    {s.support_amount_label ?? (s.max_support_amount ? `${s.max_support_amount.toLocaleString()}만원` : '-')}
+                  </span>
+                  <button
+                    onClick={() => checkEligibility(i, s)}
+                    disabled={elig?.loading}
+                    className="text-xs px-2.5 py-1 rounded-full bg-gray-100 text-gray-600 hover:bg-brand hover:text-white transition-colors shrink-0 disabled:opacity-50"
+                  >
+                    {elig?.loading ? '체크 중...' : '자격 체크'}
+                  </button>
+                </div>
+
+                {elig?.data && (
+                  <div className="px-3 pb-3 pt-1 border-t border-gray-50">
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <span className="text-xs font-bold text-gray-700">신청 가능성: {elig.data.overall}</span>
+                    </div>
+                    {elig.data.overall_note && (
+                      <div className="text-xs text-gray-500 mb-2">{elig.data.overall_note}</div>
+                    )}
+                    <div className="space-y-1">
+                      {elig.data.items.map((it, j) => (
+                        <div key={j} className="flex items-start gap-2 text-xs">
+                          <span className={`px-1.5 py-0.5 rounded shrink-0 font-medium ${STATUS_STYLE[it.status] ?? 'bg-gray-100 text-gray-600'}`}>
+                            {it.status}
+                          </span>
+                          <span className="text-gray-600">{it.requirement}{it.note ? ` — ${it.note}` : ''}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
-              <span className="text-xs text-brand font-medium shrink-0">
-                {s.support_amount_label ?? (s.max_support_amount ? `${s.max_support_amount.toLocaleString()}만원` : '-')}
-              </span>
-            </a>
-          ))}
+            )
+          })}
         </div>
       </div>
     </div>

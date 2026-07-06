@@ -128,12 +128,15 @@ class OnlineRAGRetriever:
 
     def _generate_queries(self, industry: str, ai_type: str) -> list[str]:
         """
-        Claude로 다각도 검색 쿼리 3개 생성.
+        Claude로 다각도 검색 쿼리 4개 생성.
 
-        3개 각도:
+        4개 각도:
         1. 도입 사례/성공사례 중심
         2. 비용/ROI/투자회수 중심
         3. 기술/공정 개선 효과 중심
+        4. 실패 사례/도입 시 주의할 점 — 성공사례만 보여주면 "가짜 정밀함"과
+           똑같은 편향(좋은 얘기만 골라 보여줌)이 생기므로, 실패·리스크
+           요인도 균형있게 찾아서 사장님이 놓치기 쉬운 함정을 알려준다
         """
         prompt = f"""다음 조건으로 한국어 웹 검색 쿼리 {MULTI_QUERY_COUNT}개를 생성하세요.
 - 업종: {industry}
@@ -143,8 +146,9 @@ class OnlineRAGRetriever:
 1. 도입 사례/성공사례 중심 (예: "XX업체 AI 도입 성공사례")
 2. 비용/ROI/투자회수 중심 (예: "AI 도입 비용 ROI 회수기간")
 3. 기술/공정 개선 효과 중심 (예: "공정 AI 적용 불량률 절감 효과")
+4. 실패 사례/도입 시 주의할 점 중심 (예: "AI 도입 실패 원인", "스마트공장 도입 실패 사례")
 
-JSON 배열로만 출력 (설명 없이, 따옴표 포함): ["쿼리1", "쿼리2", "쿼리3"]"""
+JSON 배열로만 출력 (설명 없이, 따옴표 포함): ["쿼리1", "쿼리2", "쿼리3", "쿼리4"]"""
 
         try:
             raw = call_llm(user=prompt, max_tokens=MULTI_QUERY_MAX_TOKENS)
@@ -160,6 +164,7 @@ JSON 배열로만 출력 (설명 없이, 따옴표 포함): ["쿼리1", "쿼리2
                 f"{industry} {ai_type} 도입 사례 중소기업",
                 f"{industry} AI 도입 비용 ROI 투자회수",
                 f"{industry} 스마트공장 공정 개선 효과",
+                f"{industry} AI 도입 실패 사례 주의점",
             ]
 
     # ──────────────────────────────────────────────
@@ -288,10 +293,14 @@ JSON 배열로만 출력 (설명 없이, 따옴표 포함): ["쿼리1", "쿼리2
         Claude가 각 후보에 관련성 점수(0~10)를 부여하고 Top-N 선별.
 
         평가 기준:
-        - 실제 도입 사례가 있는가
+        - 실제 도입 사례(성공/실패 모두)가 있는가
         - 구체적 수치(비용, ROI, 절감률)가 있는가
         - 한국 중소 제조기업 관련인가
         - 해당 업종/AI유형과 일치하는가
+
+        성공사례만 골라 보여주면 "좋은 얘기만 보여주는 편향"이 생기므로,
+        실패사례/주의사항 결과가 있으면 점수를 깎지 않고 case_type으로
+        구분해 최종 결과에 최소 1건은 포함되도록 유도한다.
         """
         company_size = company_profile.get("company_size", "소기업")
 
@@ -309,10 +318,10 @@ JSON 배열로만 출력 (설명 없이, 따옴표 포함): ["쿼리1", "쿼리2
 [검색 목적]
 - 업종: {industry} ({company_size})
 - AI 유형: {ai_type}
-- 목적: 실제 AI 도입 사례, 비용/ROI 수치, 공정 개선 효과 파악
+- 목적: 실제 AI 도입 사례(성공+실패 모두), 비용/ROI 수치, 공정 개선 효과 파악
 
 [평가 기준]
-- 실제 도입 사례 포함 여부 (가중치 높음)
+- 실제 도입 사례 포함 여부 (가중치 높음) — 성공사례든 실패사례든 동일하게 높게 평가할 것
 - 구체적 수치(도입비용, ROI, 불량률 감소, 절감액) 포함 여부
 - 한국 중소 제조기업 관련 여부
 - 해당 업종·AI유형 일치 여부
@@ -321,11 +330,13 @@ JSON 배열로만 출력 (설명 없이, 따옴표 포함): ["쿼리1", "쿼리2
 {formatted}
 
 JSON으로만 출력 (설명·마크다운 없이):
-[{{"index": 1, "score": 8, "reason": "금속가공 예측유지보수 실제 수치 포함"}}, ...]
+[{{"index": 1, "score": 8, "case_type": "성공사례", "reason": "금속가공 예측유지보수 실제 수치 포함"}}, ...]
 
 규칙:
-- 상위 {RERANK_TOP_N}개만 출력
-- 점수 내림차순 정렬
+- case_type은 "성공사례" / "실패사례·주의점" / "일반정보" 중 하나
+- 상위 {RERANK_TOP_N}개만 출력하되, "실패사례·주의점"에 해당하는 결과가 후보 중에 있다면
+  점수와 무관하게 최소 1건은 반드시 포함시킬 것 (균형 잡힌 근거 제시를 위함)
+- 나머지는 점수 내림차순 정렬
 - index는 위 목록의 번호"""
 
         try:
@@ -342,6 +353,7 @@ JSON으로만 출력 (설명·마크다운 없이):
                     doc = candidates[idx].copy()
                     doc["relevance_score"] = item.get("score", 0)
                     doc["relevance_reason"] = item.get("reason", "")
+                    doc["case_type"] = item.get("case_type", "일반정보")
                     result.append(doc)
 
             return result
@@ -353,4 +365,5 @@ JSON으로만 출력 (설명·마크다운 없이):
                 # "#1" 순번으로 표시됨 — 리랭커 실패와 "진짜 0점"을 구분하기 위함
                 doc.setdefault("relevance_score", None)
                 doc.setdefault("relevance_reason", "리랭커 일시 오류 — RRF 검색 순서로 표시")
+                doc.setdefault("case_type", "일반정보")
             return candidates[:RERANK_TOP_N]

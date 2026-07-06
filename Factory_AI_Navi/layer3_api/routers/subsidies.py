@@ -3,14 +3,19 @@ layer3_api/routers/subsidies.py
 =================================
 GET /api/v1/subsidies — 현재 신청 가능 지원사업 목록
 POST /api/v1/roi-simulate — ROI 단독 계산
+POST /api/v1/subsidy-eligibility — 지원사업 자격 자동 체크리스트
 """
+
+import json
 
 from fastapi import APIRouter, Query
 from layer2_ai.agents.matching import MatchingAgent
 from layer2_ai.agents.roi_calculator import ROICalculator
-from layer2_ai.constants import INDUSTRY_ROI_PARAMS
+from layer2_ai.config import logger
+from layer2_ai.constants import INDUSTRY_NAMES, INDUSTRY_ROI_PARAMS
+from layer2_ai.llm_client import call_llm
 from layer2_ai.tools.benchmark_tool import BenchmarkTool
-from layer3_api.schemas import ROISimulateRequest
+from layer3_api.schemas import EligibilityCheckRequest, ROISimulateRequest
 
 router = APIRouter()
 _matching = MatchingAgent()
@@ -78,3 +83,71 @@ def roi_simulate(req: ROISimulateRequest):
             "operating_rate_baseline": peer_data.get("avg_operating_rate"),
         },
     }
+
+
+_ELIGIBILITY_FALLBACK = {
+    "items": [],
+    "overall": "확인 필요",
+    "overall_note": "일시적 오류로 자동 체크에 실패했습니다 — 공고 원문을 직접 확인해 주세요.",
+}
+
+
+@router.post("/subsidy-eligibility")
+def check_eligibility(req: EligibilityCheckRequest):
+    """
+    지원사업 자격 자동 체크리스트.
+
+    공고 설명(description) 원문에서 신청 자격 요건을 뽑아 사용자 회사
+    프로필과 대조한다. 사용자가 지원사업 하나를 클릭했을 때만 호출되는
+    온디맨드 방식 — 매칭된 모든 공고에 대해 미리 돌리지 않음(LLM 호출
+    비용·할당량 절약).
+    """
+    if not req.description.strip():
+        return {
+            "items": [],
+            "overall": "확인 필요",
+            "overall_note": "공고 설명이 없어 자동 체크가 불가합니다 — 공고 원문을 직접 확인해 주세요.",
+        }
+
+    industry_name = INDUSTRY_NAMES.get(req.industry_code, req.industry_code)
+    size_label = "소기업 (50인 미만)" if req.company_size == "small" else "중기업 (50~300인)"
+
+    prompt = f"""다음 정부지원사업 공고문에서 신청 자격 요건을 찾아, 아래 신청 기업 정보와
+대조해 체크리스트를 작성하세요.
+
+[공고명] {req.program_name}
+[공고 내용]
+{req.description[:1500]}
+
+[신청 기업 정보]
+- 업종: {industry_name} ({req.industry_code})
+- 기업 규모: {size_label}
+- 종업원 수: {req.headcount}인
+
+JSON으로만 출력 (설명·마크다운 없이):
+{{
+  "items": [
+    {{"requirement": "공고문에서 추출한 자격요건 한 줄", "status": "충족|확인필요|미충족", "note": "판단 근거 한 줄"}}
+  ],
+  "overall": "충족 가능성 높음|보통|낮음",
+  "overall_note": "종합 코멘트 한 줄"
+}}
+
+규칙:
+- 공고문에 지역·업종·규모·설립연차 등 제한이 있으면 반드시 항목으로 뽑아 대조할 것
+- 공고문에 없는 정보(예: 매출액, 설립일)로는 함부로 판단하지 말고 "확인필요"로 표시할 것
+- 최대 5개 항목만 추출
+- 공고문 자체에 자격요건이 뚜렷하지 않으면 items를 빈 배열로 두고 overall_note에 그 사실을 명시할 것"""
+
+    try:
+        raw = call_llm(user=prompt, max_tokens=700)
+        start = raw.find("{")
+        end = raw.rfind("}") + 1
+        result = json.loads(raw[start:end])
+        result.setdefault("items", [])
+        result.setdefault("overall", "확인 필요")
+        result.setdefault("overall_note", "")
+        return result
+    except Exception as e:
+        logger.error("[Eligibility] 자격 체크 실패: %s", e)
+        return _ELIGIBILITY_FALLBACK

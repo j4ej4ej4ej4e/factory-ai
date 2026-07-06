@@ -65,12 +65,14 @@ export interface Subsidy {
   is_roots_priority?: boolean
   is_industry_specific?: boolean
   apply_url?: string
+  description?: string
 }
 
 export interface RAGSource {
   url?: string
   title?: string
   relevance_score?: number
+  case_type?: '성공사례' | '실패사례·주의점' | '일반정보'
 }
 
 export interface IndustryWeather {

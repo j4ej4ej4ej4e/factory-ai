@@ -39,8 +39,8 @@ TAVILY_API_KEY: str = os.getenv("TAVILY_API_KEY", "")
 # ══════════════════════════════════════════════
 # [3] Multi-Query 설정
 # ══════════════════════════════════════════════
-MULTI_QUERY_COUNT: int = 3      # Claude가 생성할 쿼리 수
-MULTI_QUERY_MAX_TOKENS: int = 200
+MULTI_QUERY_COUNT: int = 4      # 성공사례/비용ROI/효과/실패주의 4각도
+MULTI_QUERY_MAX_TOKENS: int = 250
 
 # ══════════════════════════════════════════════
 # [4] RRF (Reciprocal Rank Fusion) 설정

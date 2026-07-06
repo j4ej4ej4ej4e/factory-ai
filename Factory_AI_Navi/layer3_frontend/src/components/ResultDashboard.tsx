@@ -173,7 +173,7 @@ export default function ResultDashboard({ result, onReset }: Props) {
       {/* 섹션 4: 지원사업 */}
       <div className="card">
         <h3 className="section-title">📅 지원금 마감 캘린더</h3>
-        <SubsidyCalendar subsidies={subsidies ?? []} />
+        <SubsidyCalendar subsidies={subsidies ?? []} company={company} />
       </div>
 
       <div className="card">
@@ -191,6 +191,15 @@ export default function ResultDashboard({ result, onReset }: Props) {
                 <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full min-w-fit">
                   {s.relevance_score != null ? `관련도 ${s.relevance_score.toFixed(1)}` : `#${i+1}`}
                 </span>
+                {s.case_type && (
+                  <span className={`text-xs px-2 py-0.5 rounded-full min-w-fit font-medium ${
+                    s.case_type === '실패사례·주의점' ? 'bg-red-100 text-red-700' :
+                    s.case_type === '성공사례' ? 'bg-green-100 text-green-700' :
+                    'bg-blue-50 text-blue-600'
+                  }`}>
+                    {s.case_type}
+                  </span>
+                )}
                 {s.url ? (
                   <a href={s.url} target="_blank" rel="noopener noreferrer"
                     className="text-brand hover:underline truncate"

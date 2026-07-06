@@ -37,3 +37,12 @@ class ROISimulateRequest(BaseModel):
     labor_reduction_rate: Optional[float] = Field(None, ge=0, le=1, description="인건비 절감률 (0.0~1.0)")
     energy_reduction_rate: Optional[float] = Field(None, ge=0, le=1, description="에너지 절감률 (0.0~1.0)")
     operating_rate_gain_pp: Optional[float] = Field(None, ge=0, le=50, description="가동률 개선폭 (%p)")
+
+
+class EligibilityCheckRequest(BaseModel):
+    """지원사업 자격 자동 체크리스트 요청 — 공고 원문을 사용자 프로필과 대조"""
+    program_name: str = Field(..., description="지원사업명")
+    description: str = Field("", description="공고 상세 설명 (신청자격 텍스트 추출 대상)")
+    industry_code: str
+    company_size: str
+    headcount: int = Field(..., ge=1)
