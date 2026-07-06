@@ -79,9 +79,10 @@ def init_db() -> None:
         init_db()
     """
     # 모든 모델을 import 해야 Base.metadata 에 등록됨
-    import layer1_etl.models.industry_stats  # noqa: F401
-    import layer1_etl.models.subsidies       # noqa: F401
-    import layer1_etl.models.benchmark       # noqa: F401
+    import layer1_etl.models.industry_stats     # noqa: F401
+    import layer1_etl.models.subsidies          # noqa: F401
+    import layer1_etl.models.benchmark          # noqa: F401
+    import layer1_etl.models.diagnosis_history  # noqa: F401
 
     Base.metadata.create_all(bind=engine, checkfirst=True)
     logger.info("[DB] 테이블 초기화 완료: %s", list(Base.metadata.tables.keys()))

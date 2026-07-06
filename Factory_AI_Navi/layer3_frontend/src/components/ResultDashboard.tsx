@@ -2,7 +2,10 @@
 
 import type { DiagnosisResult } from '@/lib/types'
 import BenchmarkRadar from './BenchmarkRadar'
+import IndustryWeather from './IndustryWeather'
+import PeerRanking from './PeerRanking'
 import ROIBarChart from './ROIBarChart'
+import ROISimulatorPanel from './ROISimulatorPanel'
 import SubsidyTable from './SubsidyTable'
 
 interface Props {
@@ -18,7 +21,10 @@ const GAP_ASSESS_COLOR = (assessment: string | undefined) => {
 }
 
 export default function ResultDashboard({ result, onReset }: Props) {
-  const { report_id, industry_name, company, gap_analysis, ai_priorities, roi_results, subsidies, rag_sources } = result
+  const {
+    report_id, industry_name, company, gap_analysis, ai_priorities,
+    roi_results, subsidies, rag_sources, industry_weather, peer_ranking,
+  } = result
 
   const handleDownloadPDF = () => {
     window.open(`/api/v1/report/${report_id}/pdf`, '_blank')
@@ -44,6 +50,12 @@ export default function ResultDashboard({ result, onReset }: Props) {
             </button>
           </div>
         </div>
+      </div>
+
+      {/* 업종 날씨예보 + 동종업계 순위 */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <IndustryWeather weather={industry_weather} />
+        <PeerRanking ranking={peer_ranking} />
       </div>
 
       {/* 섹션 1: 벤치마크 갭 분석 */}
@@ -151,6 +163,11 @@ export default function ResultDashboard({ result, onReset }: Props) {
           </div>
         </div>
       </div>
+
+      {/* 섹션 3-1: 인터랙티브 ROI 시뮬레이터 */}
+      {ai_priorities?.length > 0 && (
+        <ROISimulatorPanel company={company} aiPriorities={ai_priorities} />
+      )}
 
       {/* 섹션 4: 지원사업 */}
       <div className="card">

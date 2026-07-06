@@ -28,6 +28,12 @@ class ROISimulateRequest(BaseModel):
     headcount: int
     annual_revenue: float
     annual_production: float
+    operating_rate: Optional[float] = Field(None, ge=0, le=100, description="현재 설비 가동률 (%) — 없으면 KICOX 실측 동종평균 사용")
     ai_type: str = Field(..., example="predictive_maintenance")
     estimated_cost: Optional[float] = Field(None, description="구축비용 (만원)")
     co_funding_rate: Optional[float] = Field(0.5, description="자부담 비율")
+
+    # ── 가상 시나리오 슬라이더 — 없으면 업종 기본값(INDUSTRY_ROI_PARAMS) 사용 ──
+    labor_reduction_rate: Optional[float] = Field(None, ge=0, le=1, description="인건비 절감률 (0.0~1.0)")
+    energy_reduction_rate: Optional[float] = Field(None, ge=0, le=1, description="에너지 절감률 (0.0~1.0)")
+    operating_rate_gain_pp: Optional[float] = Field(None, ge=0, le=50, description="가동률 개선폭 (%p)")

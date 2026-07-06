@@ -102,6 +102,7 @@ class ROICalculator:
         peer_data: dict,
         ai_priorities: list[dict],
         subsidies: list[dict],
+        param_overrides: dict | None = None,
     ) -> list[ROIResult]:
         """
         AI 우선순위 Top3 각각에 대해 ROI 계산.
@@ -116,13 +117,19 @@ class ROICalculator:
             DiagnosticAgent Step B 결과 (ai_type, estimated_cost 포함)
         subsidies : list[dict]
             SubsidyTool.search() 결과
+        param_overrides : dict | None
+            사용자가 "가상 시나리오" 슬라이더로 조정한 가정치
+            (labor_reduction_rate, energy_reduction_rate, operating_rate_gain_pp 중 일부/전부).
+            업종 기본값(INDUSTRY_ROI_PARAMS) 위에 덮어씌워짐 — 실측 기준선(가동률)은 그대로 유지.
 
         Returns
         -------
         list[ROIResult]
         """
         industry_code = company_profile.get("industry_code", "C25")
-        params = INDUSTRY_ROI_PARAMS.get(industry_code, INDUSTRY_ROI_PARAMS["C25"])
+        params = {**INDUSTRY_ROI_PARAMS.get(industry_code, INDUSTRY_ROI_PARAMS["C25"])}
+        if param_overrides:
+            params.update({k: v for k, v in param_overrides.items() if v is not None})
 
         headcount         = float(company_profile.get("headcount", 30))
         annual_production = float(company_profile.get("annual_production", 0))

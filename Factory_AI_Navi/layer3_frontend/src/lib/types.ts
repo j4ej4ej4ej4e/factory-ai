@@ -71,6 +71,20 @@ export interface RAGSource {
   relevance_score?: number
 }
 
+export interface IndustryWeather {
+  icon: string
+  label: string
+  message: string
+  energy_warning?: string | null
+  basis?: string | null
+}
+
+export interface PeerRanking {
+  percentile: number | null
+  sample_size: number
+  min_sample_size: number
+}
+
 export interface DiagnosisResult {
   report_id: string
   industry_name: string
@@ -78,6 +92,8 @@ export interface DiagnosisResult {
   peer_data: Record<string, unknown>
   gap_analysis: Record<string, GapEntry>
   improvement_priorities: string[]
+  industry_weather?: IndustryWeather | null
+  peer_ranking?: PeerRanking | null
   ai_priorities: AIPriority[]
   roi_results: ROIResult[]
   subsidies: Subsidy[]

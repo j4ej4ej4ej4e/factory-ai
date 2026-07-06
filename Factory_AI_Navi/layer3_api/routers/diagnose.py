@@ -96,6 +96,8 @@ async def diagnose(company: CompanyProfileRequest):
                 "peer_data":              step_a.get("peer_data") or {},
                 "gap_analysis":           step_a.get("gap_analysis", {}),
                 "improvement_priorities": step_a.get("improvement_priorities", []),
+                "industry_weather":       step_a.get("industry_weather"),
+                "peer_ranking":           step_a.get("peer_ranking"),
                 "ai_priorities":          ai_priorities,
                 "roi_results":            roi_results,
                 "subsidies":              subsidies,

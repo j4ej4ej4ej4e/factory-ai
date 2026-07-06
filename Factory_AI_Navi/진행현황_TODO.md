@@ -73,6 +73,16 @@
   `layer3_frontend`(`types.ts`/`BenchmarkRadar.tsx`/`LandingPage.tsx` 필드·문구 동기화),
   `Factory_AI_Navi_기획서.md` v2.1(STEP①②③ 문구, 데모 시나리오, 기대효과 표 전부 동기화)
 
+**2026-07-06 추가 — 인터랙티브 확장 기능 3종**
+
+| 기능 | 내용 | 파일 |
+|---|---|---|
+| 🕒 회수 타이머 | 인건비/에너지 절감률·가동률 개선폭을 슬라이더로 조정하며 ROI 실시간 재계산 | `roi_calculator.py`(`param_overrides`), `schemas.py`, `routers/subsidies.py`, `ROISimulatorPanel.tsx` |
+| ☀️ 업종 날씨예보 | 가동률 갭(KICOX 실측)을 맑음/구름조금/비/폭풍주의보 아이콘으로 직관화 | `benchmark_tool.py`(`get_industry_weather`), `IndustryWeather.tsx` |
+| 🏆 동종업계 순위표 | 사용자가 입력한 가동률을 익명 누적(`diagnosis_history` 신규 테이블) → 같은 업종·규모 내 상위 X% 계산. 표본 5건 미만이면 "데이터 쌓는 중" 안내로 대체 | `models/diagnosis_history.py`, `benchmark_tool.py`(`record_and_rank`), `PeerRanking.tsx` |
+
+순위표는 조작된 통계가 아니라 실제 사용자 입력값이 쌓이는 구조라 서비스가 커질수록 정확해지는 성장형 지표. 백엔드(syntax+기능 테스트) / 프론트(tsc + `next build`) 전부 검증 완료.
+
 **RAG 파이프라인 실증 (2026-06-30)**
 
 ```
@@ -101,6 +111,9 @@
 - `ResultDashboard.tsx` — 전체 결과 대시보드
 - `BenchmarkRadar.tsx` — Recharts RadarChart (귀사 vs 업종평균)
 - `ROIBarChart.tsx` — Recharts BarChart ROI 비교
+- `ROISimulatorPanel.tsx` — 회수 타이머 (인터랙티브 ROI 시뮬레이터, 2026-07-06 추가)
+- `IndustryWeather.tsx` — 업종 날씨예보 (2026-07-06 추가)
+- `PeerRanking.tsx` — 동종업계 순위표 (2026-07-06 추가)
 - `SubsidyTable.tsx` — 지원사업 테이블 (긴급/뿌리업종 배지)
 
 ---
@@ -190,3 +203,4 @@ npm run dev
 | 2026-06-30 | v3.0 | Layer 3 FastAPI + Next.js 완성, 웹 서비스 실행 완료 |
 | 2026-07-05 | v3.1 | D-1 기준 전체 현황 업데이트, 완료 항목 정리 |
 | 2026-07-05 | v3.2 | KICOX/BIZINFO/K-Startup 실데이터 연동, KEIT 제거, 불량률 추정치 의존도 제거(ROI·우선순위 로직을 가동률 실측 기반으로 전환), 기획서 v2.1 동기화 |
+| 2026-07-06 | v3.3 | 인터랙티브 확장 3종 추가: 회수 타이머(ROI 시뮬레이터), 업종 날씨예보, 동종업계 순위표(`diagnosis_history` 신규 테이블) |

@@ -8,9 +8,14 @@ kiat_industry_stats 테이블에서 동종업계 평균 지표를 조회하고
 """
 
 from layer1_etl.models.base import SessionLocal
+from layer1_etl.models.diagnosis_history import DiagnosisHistory
 from layer1_etl.models.industry_stats import KiatIndustryStat
 from layer2_ai.config import logger
 from layer2_ai.constants import INDUSTRY_NAMES
+
+# 순위(백분위)를 보여주기 전 최소로 쌓여야 하는 표본 수
+# (n=1~2 상태에서 "상위 X%"를 보여주면 의미 없는 숫자가 되므로 방어)
+MIN_SAMPLE_SIZE = 5
 
 
 class BenchmarkTool:
@@ -147,6 +152,114 @@ class BenchmarkTool:
             }
 
         return gaps
+
+    def record_and_rank(
+        self, industry_code: str, company_size: str, operating_rate: float | None,
+    ) -> dict | None:
+        """
+        "동종업계 순위표" — 현재 진단의 가동률을 diagnosis_history에 익명 기록하고,
+        같은 업종·규모 내에서 몇 %에 드는지 계산한다.
+
+        조작된 통계가 아니라 사용자들이 실제로 입력한 값이 쌓이는 구조라,
+        서비스가 커질수록 순위 정확도가 올라가는 성장형 지표다.
+        표본이 MIN_SAMPLE_SIZE 미만이면 순위 대신 안내 메시지용 sample_size만 반환한다.
+
+        Parameters
+        ----------
+        operating_rate : float | None
+            사용자 입력 가동률. None이면 기록·계산 자체를 건너뛴다.
+
+        Returns
+        -------
+        dict | None : {"percentile": float|None, "sample_size": int, "min_sample_size": int}
+        """
+        if operating_rate is None:
+            return None
+
+        session = SessionLocal()
+        try:
+            session.add(DiagnosisHistory(
+                industry_code=industry_code,
+                company_size=company_size,
+                operating_rate=operating_rate,
+            ))
+            session.commit()
+
+            rows = (
+                session.query(DiagnosisHistory.operating_rate)
+                .filter_by(industry_code=industry_code, company_size=company_size)
+                .all()
+            )
+            values = [r[0] for r in rows]
+            sample_size = len(values)
+
+            if sample_size < MIN_SAMPLE_SIZE:
+                return {
+                    "percentile": None,
+                    "sample_size": sample_size,
+                    "min_sample_size": MIN_SAMPLE_SIZE,
+                }
+
+            # 상위 X% = (나보다 가동률이 높거나 같은 표본 수) / 전체 표본 수
+            better_or_equal = sum(1 for v in values if v >= operating_rate)
+            percentile_from_top = round(better_or_equal / sample_size * 100, 1)
+
+            return {
+                "percentile": percentile_from_top,
+                "sample_size": sample_size,
+                "min_sample_size": MIN_SAMPLE_SIZE,
+            }
+        except Exception as e:
+            logger.error("[Benchmark] 순위 기록/계산 실패: %s", e)
+            session.rollback()
+            return None
+        finally:
+            session.close()
+
+    def get_industry_weather(self, gap_analysis: dict) -> dict:
+        """
+        "업종 날씨예보" — 가동률 갭(KICOX 실측)을 직관적 날씨 아이콘으로 변환.
+
+        불량률·인당생산액 등 추정치는 관여하지 않고, 실측 지표(가동률·에너지비용
+        비율)만으로 판단한다 — 화면 표현만 바뀌는 거라 계산 로직은 그대로.
+
+        Returns
+        -------
+        dict : {icon, label, message, energy_warning, basis}
+        """
+        operating = gap_analysis.get("operating_rate")
+        if not operating:
+            return {
+                "icon": "🌫️", "label": "관측 불가",
+                "message": "가동률 정보가 없어 날씨를 예보할 수 없습니다. 가동률을 입력해 주세요.",
+                "energy_warning": None, "basis": None,
+            }
+
+        gap_pp = operating.get("gap_pp", 0)
+
+        if gap_pp >= 0:
+            icon, label = "☀️", "맑음"
+            message = f"가동률이 동종평균보다 {gap_pp:.1f}%p 높습니다. 양호한 상태입니다."
+        elif gap_pp >= -5:
+            icon, label = "⛅", "구름 조금"
+            message = f"가동률이 동종평균보다 {abs(gap_pp):.1f}%p 낮습니다. 주의 깊게 살펴보세요."
+        elif gap_pp >= -10:
+            icon, label = "🌧️", "비"
+            message = f"가동률이 동종평균보다 {abs(gap_pp):.1f}%p 낮습니다. 개선이 필요합니다."
+        else:
+            icon, label = "⛈️", "폭풍주의보"
+            message = f"가동률이 동종평균보다 {abs(gap_pp):.1f}%p나 낮습니다. 즉각적인 조치가 필요합니다."
+
+        energy = gap_analysis.get("energy_cost_ratio")
+        energy_warning = None
+        if energy and energy.get("gap_pp", 0) > 3:
+            energy_warning = f"에너지 비용 비율도 동종평균보다 {energy['gap_pp']:.1f}%p 높아 추가 주의가 필요합니다."
+
+        return {
+            "icon": icon, "label": label, "message": message,
+            "energy_warning": energy_warning,
+            "basis": "KICOX 실측 가동률 갭 기준",
+        }
 
     def get_improvement_potential(self, industry_code: str, gap_analysis: dict) -> list[str]:
         """

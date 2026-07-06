@@ -37,6 +37,8 @@ class DiagnosisReport:
     peer_data: dict
     gap_analysis: dict
     improvement_priorities: list[str]
+    industry_weather: dict | None
+    peer_ranking: dict | None
 
     # Step B
     ai_priorities: list[dict]
@@ -62,6 +64,8 @@ class DiagnosisReport:
             "peer_data":              self.peer_data,
             "gap_analysis":           self.gap_analysis,
             "improvement_priorities": self.improvement_priorities,
+            "industry_weather":       self.industry_weather,
+            "peer_ranking":           self.peer_ranking,
             "ai_priorities":          self.ai_priorities,
             "rag_sources":            [
                 {"url": r.get("url"), "title": r.get("title"),
@@ -193,6 +197,8 @@ class Orchestrator:
             peer_data=step_a.get("peer_data") or {},
             gap_analysis=step_a.get("gap_analysis", {}),
             improvement_priorities=step_a.get("improvement_priorities", []),
+            industry_weather=step_a.get("industry_weather"),
+            peer_ranking=step_a.get("peer_ranking"),
             ai_priorities=step_b.get("ai_priorities", []),
             rag_sources=step_b.get("rag_sources", []),
             roi_results=step_c.get("roi_results", []),

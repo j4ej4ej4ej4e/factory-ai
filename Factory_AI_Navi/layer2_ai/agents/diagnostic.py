@@ -170,18 +170,26 @@ class DiagnosticAgent:
 
         gap_analysis = {}
         improvement_priorities = []
+        industry_weather = None
 
         if peer_data:
             gap_analysis = self.benchmark_tool.analyze_gap(company_kpi, peer_data)
             improvement_priorities = self.benchmark_tool.get_improvement_potential(
                 industry_code, gap_analysis
             )
+            industry_weather = self.benchmark_tool.get_industry_weather(gap_analysis)
+
+        peer_ranking = self.benchmark_tool.record_and_rank(
+            industry_code, company_size, company_profile.get("operating_rate")
+        )
 
         logger.info("[Step A] 완료: 갭 분석 %d개 항목", len(gap_analysis))
         return {
             "peer_data":             peer_data,
             "gap_analysis":          gap_analysis,
             "improvement_priorities": improvement_priorities,
+            "industry_weather":      industry_weather,
+            "peer_ranking":          peer_ranking,
         }
 
     # ──────────────────────────────────────────────
