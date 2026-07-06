@@ -23,6 +23,12 @@ interface Props {
   aiPriorities: AIPriority[]
 }
 
+function parseMonths(s?: string): number | null {
+  if (!s) return null
+  const n = parseFloat(s)
+  return isNaN(n) ? null : n
+}
+
 function debounce<T extends (...args: never[]) => void>(fn: T, ms: number) {
   let t: ReturnType<typeof setTimeout>
   return (...args: Parameters<T>) => {
@@ -176,6 +182,37 @@ export default function ROISimulatorPanel({ company, aiPriorities }: Props) {
           <div className="font-bold text-orange-600 text-sm">{result?.roi_pct ?? '-'}</div>
         </div>
       </div>
+
+      {/* 회수 시점 타임라인 — 숫자보다 그림 한 장이 더 직관적 */}
+      {(() => {
+        const months = parseMonths(result?.payback_months)
+        if (months == null) return null
+        const HORIZON = 36 // 3년
+        const markerPct = Math.min(96, Math.max(2, (months / HORIZON) * 100))
+        return (
+          <div className="mt-5">
+            <div className="flex justify-between text-xs text-gray-500 mb-1.5">
+              <span>오늘 투자</span>
+              <span className="font-medium text-green-700">
+                {months < 1 ? `${(months * 30).toFixed(0)}일 만에 회수` : `${months.toFixed(1)}개월 만에 회수`}
+              </span>
+              <span>3년 후</span>
+            </div>
+            <div className="relative w-full h-4 rounded-full overflow-hidden bg-gray-100">
+              <div className="absolute inset-y-0 left-0 bg-orange-300" style={{ width: `${markerPct}%` }} />
+              <div className="absolute inset-y-0 bg-green-300" style={{ left: `${markerPct}%`, right: 0 }} />
+              <div
+                className="absolute -top-1 h-6 w-1 bg-gray-800 rounded-full"
+                style={{ left: `calc(${markerPct}% - 2px)` }}
+              />
+            </div>
+            <div className="flex justify-between text-[11px] text-gray-400 mt-1">
+              <span>🟧 투자금 회수 전</span>
+              <span>🟩 순이익 구간 (약 {Math.max(0, HORIZON - months).toFixed(0)}개월)</span>
+            </div>
+          </div>
+        )
+      })()}
     </div>
   )
 }

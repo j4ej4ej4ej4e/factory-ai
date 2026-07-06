@@ -45,9 +45,9 @@ async def diagnose(company: CompanyProfileRequest):
         try:
             # ── 매칭 ─────────────────────────────────────
             yield _sse("progress", {"step": "matching", "message": "지원사업 검색 중...", "pct": 10})
-            # top_n=20 — "마감 캘린더"에서 한 달 치를 한눈에 보여주기 위해 기존 5건보다 넉넉히 조회
+            # top_n=100 — "마감 캘린더"에서 매칭되는 공고를 사실상 전부 보여주기 위해 넉넉히 조회
             subsidies = await loop.run_in_executor(
-                None, lambda: _matching.match(profile, ai_priorities=None, top_n=20)
+                None, lambda: _matching.match(profile, ai_priorities=None, top_n=100)
             )
             yield _sse("step_result", {"step": "matching", "data": subsidies})
 
@@ -72,7 +72,7 @@ async def diagnose(company: CompanyProfileRequest):
             ai_priorities = step_b.get("ai_priorities", [])
             if ai_priorities:
                 subsidies = await loop.run_in_executor(
-                    None, lambda: _matching.match(profile, ai_priorities, top_n=20)
+                    None, lambda: _matching.match(profile, ai_priorities, top_n=100)
                 )
 
             # ── Step C ───────────────────────────────────

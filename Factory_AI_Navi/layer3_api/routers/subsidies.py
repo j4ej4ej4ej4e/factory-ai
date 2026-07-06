@@ -22,7 +22,7 @@ _benchmark = BenchmarkTool()
 def list_subsidies(
     industry_code: str = Query(..., example="C25"),
     company_size: str = Query(..., example="small"),
-    top_n: int = Query(10, ge=1, le=20),
+    top_n: int = Query(10, ge=1, le=100),
 ):
     """업종·규모 기준 지원사업 목록 반환"""
     profile = {"industry_code": industry_code, "company_size": company_size}

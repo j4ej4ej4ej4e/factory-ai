@@ -142,14 +142,9 @@ class BenchmarkTool:
                 "assessment": "양호" if gap_pp <= 0 else f"동종평균보다 {gap_pp:.1f}%p 높음 → 개선 필요",
             }
 
-        # ── AI 도입률 (참고용) ───────────────────────
-        if peer_data.get("ai_adoption_rate") is not None:
-            gaps["ai_adoption_rate"] = {
-                "label":    "AI 도입률",
-                "unit":     "%",
-                "peer_avg": round(peer_data["ai_adoption_rate"], 1),
-                "note":     "동종업계 AI 도입률 참고값",
-            }
+        # AI 도입률은 화면 갭 비교 목록에서 제외함 — 사용자에게 본인 AI 도입률을
+        # 입력받지 않기 때문에 "귀사 vs 업종평균" 비교 자체가 성립하지 않음
+        # (업종평균값은 diagnostic.py의 LLM 프롬프트 컨텍스트에는 별도로 계속 전달됨)
 
         return gaps
 
