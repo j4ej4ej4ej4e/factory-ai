@@ -75,6 +75,21 @@ export interface RAGSource {
   case_type?: '성공사례' | '실패사례·주의점' | '일반정보'
 }
 
+export interface PainPointMapping {
+  pain_point: string
+  pain_point_label: string
+  mapped_ai_types: string[]
+  mapped_ai_names: string[]
+}
+
+export interface DecisionTrace {
+  pain_point_mappings: PainPointMapping[]
+  industry_default_ai: { ai_types: string[]; ai_names: string[] }
+  priority_order: { ai_types: string[]; ai_names: string[] }
+  rag_query_ai_type: string
+  rag_query_ai_name: string
+}
+
 export interface IndustryWeather {
   icon: string
   label: string
@@ -102,6 +117,7 @@ export interface DiagnosisResult {
   roi_results: ROIResult[]
   subsidies: Subsidy[]
   rag_sources: RAGSource[]
+  decision_trace?: DecisionTrace | null
 }
 
 export interface SSEProgress {

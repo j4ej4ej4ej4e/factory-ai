@@ -56,6 +56,18 @@ _FALLBACK_TEMPLATES: dict[str, dict[str, str]] = {
     },
 }
 
+# 화면/프롬프트 공용 pain_point 한글 라벨 (반드시 constants.py의
+# PAIN_POINT_TO_AI 키와 정확히 일치해야 함)
+_PAIN_POINT_LABELS: dict[str, str] = {
+    "defect_high":           "불량률 높음",
+    "equipment_breakdown":   "설비 자주 고장",
+    "energy_cost":           "에너지 비용 과다",
+    "quality_inconsistency": "품질 균일성 불량",
+    "delivery_delay":        "납기 지연",
+    "labor_shortage":        "인력 부족",
+    "material_waste":        "재료비 과다",
+}
+
 # ──────────────────────────────────────────────
 # Claude 시스템 프롬프트
 # ──────────────────────────────────────────────
@@ -254,10 +266,18 @@ class DiagnosticAgent:
         params  = INDUSTRY_ROI_PARAMS.get(industry_code, {})
         best_ai = params.get("best_ai", [])
 
-        # Pain point에서 추가 AI 유형 도출
+        # Pain point에서 추가 AI 유형 도출 (판단 근거 트레이스용으로 매핑 과정 기록)
         pain_ai = []
+        pain_point_mappings = []
         for pp in pain_points:
-            pain_ai.extend(PAIN_POINT_TO_AI.get(pp, []))
+            mapped = PAIN_POINT_TO_AI.get(pp, [])
+            pain_ai.extend(mapped)
+            pain_point_mappings.append({
+                "pain_point": pp,
+                "pain_point_label": _PAIN_POINT_LABELS.get(pp, pp),
+                "mapped_ai_types": mapped,
+                "mapped_ai_names": [AI_APPLICATION_TYPES.get(t, t) for t in mapped],
+            })
         # 중복 제거, 사장님이 직접 체크한 pain point 기반 AI 우선
         # (업종 평균 best_ai는 pain_point 미입력 시 보조 후보로 사용)
         priority_ai = list(dict.fromkeys(pain_ai + best_ai))
@@ -272,11 +292,28 @@ class DiagnosticAgent:
         # Claude 호출
         ai_priorities = self._call_claude_for_priorities(prompt, priority_ai, industry_code)
 
+        # "판단 근거 트레이스" — 블랙박스 추천이 아니라, 어떤 규칙과 근거를
+        # 거쳐 이 추천에 도달했는지 그대로 노출한다 (설명 가능한 AI)
+        decision_trace = {
+            "pain_point_mappings":  pain_point_mappings,
+            "industry_default_ai": {
+                "ai_types": best_ai,
+                "ai_names": [AI_APPLICATION_TYPES.get(t, t) for t in best_ai],
+            },
+            "priority_order": {
+                "ai_types": priority_ai,
+                "ai_names": [AI_APPLICATION_TYPES.get(t, t) for t in priority_ai],
+            },
+            "rag_query_ai_type": primary_ai,
+            "rag_query_ai_name": AI_APPLICATION_TYPES.get(primary_ai, primary_ai),
+        }
+
         logger.info("[Step B] 완료: AI 우선순위 %d개 도출, RAG 소스 %d건",
                     len(ai_priorities), len(rag_sources))
         return {
             "ai_priorities": ai_priorities,
             "rag_sources":   rag_sources,
+            "decision_trace": decision_trace,
         }
 
     def _build_step_b_prompt(
@@ -304,18 +341,9 @@ class DiagnosticAgent:
         kpi_text = "\n".join(kpi_lines) if kpi_lines else "- 입력값 없음"
 
         # Pain point 텍스트
-        pain_labels = {
-            "defect_high":           "불량률 높음",
-            "equipment_breakdown":   "설비 자주 고장",
-            "energy_cost":           "에너지 비용 과다",
-            "quality_inconsistency": "품질 균일성 불량",
-            "delivery_delay":        "납기 지연",
-            "labor_shortage":        "인력 부족",
-            "material_waste":        "재료비 과다",
-        }
         pain_points = company_profile.get("pain_points", [])
         pain_text = "\n".join(
-            f"- {pain_labels.get(p, p)}" for p in pain_points
+            f"- {_PAIN_POINT_LABELS.get(p, p)}" for p in pain_points
         ) if pain_points else "- 미입력"
 
         # 벤치마크 텍스트

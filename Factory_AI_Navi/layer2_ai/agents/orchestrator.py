@@ -43,6 +43,7 @@ class DiagnosisReport:
     # Step B
     ai_priorities: list[dict]
     rag_sources: list[dict]
+    decision_trace: dict | None
 
     # Step C
     roi_results: list[ROIResult]
@@ -69,9 +70,11 @@ class DiagnosisReport:
             "ai_priorities":          self.ai_priorities,
             "rag_sources":            [
                 {"url": r.get("url"), "title": r.get("title"),
-                 "relevance_score": r.get("relevance_score")}
+                 "relevance_score": r.get("relevance_score"),
+                 "case_type": r.get("case_type")}
                 for r in self.rag_sources
             ],
+            "decision_trace":         self.decision_trace,
             "roi_results":  [r.to_dict() for r in self.roi_results],
             "subsidies":    self.subsidies,
             "generated_at": self.generated_at,
@@ -201,6 +204,7 @@ class Orchestrator:
             peer_ranking=step_a.get("peer_ranking"),
             ai_priorities=step_b.get("ai_priorities", []),
             rag_sources=step_b.get("rag_sources", []),
+            decision_trace=step_b.get("decision_trace"),
             roi_results=step_c.get("roi_results", []),
             subsidies=subsidies,
             elapsed_seconds=elapsed,

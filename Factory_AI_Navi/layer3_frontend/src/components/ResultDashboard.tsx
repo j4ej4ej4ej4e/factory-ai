@@ -2,6 +2,7 @@
 
 import type { DiagnosisResult } from '@/lib/types'
 import BenchmarkRadar from './BenchmarkRadar'
+import DecisionTrace from './DecisionTrace'
 import IndustryWeather from './IndustryWeather'
 import PeerRanking from './PeerRanking'
 import ROIBarChart from './ROIBarChart'
@@ -24,7 +25,7 @@ const GAP_ASSESS_COLOR = (assessment: string | undefined) => {
 export default function ResultDashboard({ result, onReset }: Props) {
   const {
     report_id, industry_name, company, gap_analysis, ai_priorities,
-    roi_results, subsidies, rag_sources, industry_weather, peer_ranking,
+    roi_results, subsidies, rag_sources, industry_weather, peer_ranking, decision_trace,
   } = result
 
   const handleDownloadPDF = () => {
@@ -90,6 +91,9 @@ export default function ResultDashboard({ result, onReset }: Props) {
           </div>
         </div>
       </div>
+
+      {/* 판단 근거 트레이스 — 설명 가능한 AI */}
+      <DecisionTrace trace={decision_trace} />
 
       {/* 섹션 2: AI 적용 우선순위 */}
       <div className="card">

@@ -64,8 +64,9 @@ async def diagnose(company: CompanyProfileRequest):
                 None, lambda: _diagnostic.run_step_b(profile, step_a)
             )
             yield _sse("step_result", {"step": "step_b", "data": {
-                "ai_priorities": step_b.get("ai_priorities", []),
-                "rag_sources":   step_b.get("rag_sources", []),
+                "ai_priorities":  step_b.get("ai_priorities", []),
+                "rag_sources":    step_b.get("rag_sources", []),
+                "decision_trace": step_b.get("decision_trace"),
             }})
 
             # 재매칭 (AI 유형 반영)
@@ -103,6 +104,7 @@ async def diagnose(company: CompanyProfileRequest):
                 "roi_results":            roi_results,
                 "subsidies":              subsidies,
                 "rag_sources":            step_b.get("rag_sources", []),
+                "decision_trace":         step_b.get("decision_trace"),
             }
             yield _sse("complete", {"report_id": report_id, "pct": 100})
 

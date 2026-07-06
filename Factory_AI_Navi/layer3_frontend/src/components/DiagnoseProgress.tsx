@@ -138,6 +138,7 @@ export default function DiagnoseProgress({ profile, onComplete, onError }: Props
               const d = stepData as Record<string, unknown>
               accRef.current.ai_priorities = d.ai_priorities as AIPriority[]
               accRef.current.rag_sources = d.rag_sources as DiagnosisResult['rag_sources']
+              accRef.current.decision_trace = d.decision_trace as DiagnosisResult['decision_trace']
             } else if (step === 'step_c') {
               const d = stepData as Record<string, unknown>
               accRef.current.roi_results = (d.roi_results ?? []) as DiagnosisResult['roi_results']
