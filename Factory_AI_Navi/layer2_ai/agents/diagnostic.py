@@ -19,6 +19,44 @@ from layer2_ai.rag.retriever import OnlineRAGRetriever
 from layer2_ai.tools.benchmark_tool import BenchmarkTool
 
 # ──────────────────────────────────────────────
+# LLM 장애 시 규칙 기반 대체 문구 (ai_type별)
+# ──────────────────────────────────────────────
+_FALLBACK_TEMPLATES: dict[str, dict[str, str]] = {
+    "predictive_maintenance": {
+        "target_process": "주요 생산 설비",
+        "expected_effect": "설비 고장 사전 감지로 다운타임 감소 (유사사례 기준 30~40%)",
+    },
+    "vision_inspection": {
+        "target_process": "출하 전 품질검사 공정",
+        "expected_effect": "AI 비전검사로 육안검사 대비 불량 검출률 향상",
+    },
+    "energy_optimization": {
+        "target_process": "전체 생산 공정",
+        "expected_effect": "설비별 에너지 사용패턴 분석으로 비용 절감",
+    },
+    "process_control": {
+        "target_process": "핵심 가공 공정",
+        "expected_effect": "공정 변수 실시간 모니터링으로 품질 안정화",
+    },
+    "demand_forecasting": {
+        "target_process": "생산계획·재고관리",
+        "expected_effect": "수요예측 기반 생산계획 최적화로 납기 안정화",
+    },
+    "quality_control": {
+        "target_process": "품질관리 전 공정",
+        "expected_effect": "품질 데이터 자동 분석으로 불량 조기 발견",
+    },
+    "supply_chain": {
+        "target_process": "자재·공급망 관리",
+        "expected_effect": "공급망 가시성 확보로 납기 지연 리스크 완화",
+    },
+    "robot_automation": {
+        "target_process": "반복 조립·이송 공정",
+        "expected_effect": "반복작업 자동화로 인력난 완화 및 생산성 향상",
+    },
+}
+
+# ──────────────────────────────────────────────
 # Claude 시스템 프롬프트
 # ──────────────────────────────────────────────
 _SYSTEM_PROMPT = """당신은 중소 제조기업 AI 도입 전문 컨설턴트입니다.
@@ -232,7 +270,7 @@ class DiagnosticAgent:
         prompt = self._build_step_b_prompt(company_profile, step_a_result, rag_sources, priority_ai)
 
         # Claude 호출
-        ai_priorities = self._call_claude_for_priorities(prompt)
+        ai_priorities = self._call_claude_for_priorities(prompt, priority_ai, industry_code)
 
         logger.info("[Step B] 완료: AI 우선순위 %d개 도출, RAG 소스 %d건",
                     len(ai_priorities), len(rag_sources))
@@ -334,7 +372,9 @@ class DiagnosticAgent:
             rag_text=rag_text,
         )
 
-    def _call_claude_for_priorities(self, prompt: str) -> list[dict]:
+    def _call_claude_for_priorities(
+        self, prompt: str, priority_ai: list[str], industry_code: str,
+    ) -> list[dict]:
         """LLM 호출 → AI 우선순위 JSON 파싱"""
         try:
             raw = call_llm(user=prompt, system=_SYSTEM_PROMPT, max_tokens=1500)
@@ -357,24 +397,39 @@ class DiagnosticAgent:
             return priorities
 
         except Exception as e:
-            logger.error("[Step B] Claude 호출 실패: %s → 기본 우선순위 사용", e)
-            return self._fallback_priorities(priorities=[])
+            logger.error("[Step B] Claude 호출 실패: %s → 규칙 기반 우선순위 사용", e)
+            return self._fallback_priorities(priority_ai, industry_code)
 
     @staticmethod
-    def _fallback_priorities(priorities: list) -> list[dict]:
-        """Claude 실패 시 기본 우선순위 반환"""
-        return [
-            {
-                "rank": 1,
-                "ai_type": "predictive_maintenance",
-                "ai_name": "예측유지보수",
-                "target_process": "주요 생산 설비",
-                "expected_effect": "설비 다운타임 30~40% 감소",
+    def _fallback_priorities(priority_ai: list[str], industry_code: str) -> list[dict]:
+        """
+        LLM 일시 장애 시 대체 우선순위.
+
+        고정된 예측유지보수 1건짜리 하드코딩 대신, 이미 계산된
+        priority_ai(사장님이 체크한 pain_point + 업종 best_ai 기반, run_step_b
+        에서 산출) 순서를 그대로 살려 Top3을 구성한다. RAG 실시간 사례
+        인용만 못 할 뿐, "이 회사·이 업종엔 이 AI가 맞다"는 근거는
+        LLM 없이도 이미 갖고 있는 데이터로 정확히 반영된다.
+        """
+        params = INDUSTRY_ROI_PARAMS.get(industry_code, INDUSTRY_ROI_PARAMS["C25"])
+        cost_min, cost_max = params.get("implementation_cost_range", (4000, 8000))
+        mid_cost = int((cost_min + cost_max) / 2)
+
+        types = priority_ai[:3] if priority_ai else ["predictive_maintenance"]
+        results = []
+        for i, ai_type in enumerate(types, 1):
+            tmpl = _FALLBACK_TEMPLATES.get(ai_type, _FALLBACK_TEMPLATES["predictive_maintenance"])
+            results.append({
+                "rank": i,
+                "ai_type": ai_type,
+                "ai_name": AI_APPLICATION_TYPES.get(ai_type, ai_type),
+                "target_process": tmpl["target_process"],
+                "expected_effect": tmpl["expected_effect"],
                 "implementation_period": "3~6개월",
-                "estimated_cost": 6000,
-                "rationale": "API 호출 실패로 기본값 제공",
-            }
-        ]
+                "estimated_cost": mid_cost,
+                "rationale": "실시간 사례 검색이 일시적으로 지연되어, 체크하신 현장 문제와 업종 특성 기반 규칙으로 대신 추천했습니다.",
+            })
+        return results
 
     # ──────────────────────────────────────────────
     # Step C: ROI 시뮬레이션

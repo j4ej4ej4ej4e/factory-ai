@@ -3,30 +3,34 @@
 import { useState } from 'react'
 import type { CompanyProfile } from '@/lib/types'
 
+// ⚠️ 이 목록은 반드시 DB에 실제 시드된 12개 업종(kiat_industry_stats)과
+// 정확히 일치해야 함 — 하나라도 다르면 "벤치마크 데이터 없음"으로 빈 결과가 뜬다.
 const INDUSTRY_OPTIONS = [
-  { value: 'C25',  label: 'C25 금속가공제품 제조업 (뿌리)' },
-  { value: 'C29',  label: 'C29 기타 기계 및 장비 제조업 (뿌리)' },
   { value: 'C243', label: 'C243 주조업 (뿌리)' },
-  { value: 'C244', label: 'C244 금속단조·압형·분말야금 (뿌리)' },
+  { value: 'C251', label: 'C251 금형 제조업 (뿌리)' },
+  { value: 'C259', label: 'C259 소성가공업 (뿌리)' },
+  { value: 'C289', label: 'C289 용접업 (뿌리)' },
+  { value: 'C301', label: 'C301 표면처리업 (뿌리)' },
   { value: 'C302', label: 'C302 열처리업 (뿌리)' },
-  { value: 'C303', label: 'C303 도금·표면처리업 (뿌리)' },
   { value: 'C10',  label: 'C10 식료품 제조업' },
-  { value: 'C20',  label: 'C20 화학물질 및 화학제품 제조업' },
-  { value: 'C22',  label: 'C22 고무 및 플라스틱 제품 제조업' },
+  { value: 'C22',  label: 'C22 사출성형(고무·플라스틱) 제조업' },
+  { value: 'C25',  label: 'C25 금속가공제품 제조업' },
   { value: 'C26',  label: 'C26 전자부품·컴퓨터·영상·통신 제조업' },
-  { value: 'C27',  label: 'C27 의료·정밀·광학기기 제조업' },
-  { value: 'C28',  label: 'C28 전기장비 제조업' },
+  { value: 'C29',  label: 'C29 기타 기계 및 장비(산업기계) 제조업' },
+  { value: 'C30',  label: 'C30 자동차 및 트레일러 제조업' },
 ]
 
+// ⚠️ value는 반드시 layer2_ai/constants.py의 PAIN_POINT_TO_AI 키와 정확히
+// 일치해야 함 — 하나라도 다르면 그 체크박스는 AI 우선순위 결정에 전혀
+// 반영되지 않고 조용히 무시된다 (매핑 실패 시 에러 없이 빈 결과 반환).
 const PAIN_POINT_OPTIONS = [
   { value: 'defect_high',           label: '불량률이 높음' },
   { value: 'equipment_breakdown',   label: '설비 고장이 잦음' },
-  { value: 'operating_rate_low',    label: '설비 가동률이 낮음' },
-  { value: 'energy_cost_high',      label: '에너지 비용이 높음' },
-  { value: 'labor_cost_high',       label: '인건비 부담이 큼' },
-  { value: 'quality_inspection',    label: '품질 검사에 인력이 많이 필요' },
-  { value: 'inventory_management',  label: '재고 관리가 어려움' },
-  { value: 'production_planning',   label: '생산 계획 수립이 어려움' },
+  { value: 'energy_cost',           label: '에너지 비용이 높음' },
+  { value: 'quality_inconsistency', label: '품질 균일성이 떨어짐' },
+  { value: 'delivery_delay',        label: '납기 지연이 잦음' },
+  { value: 'labor_shortage',        label: '인력 부족·인건비 부담' },
+  { value: 'material_waste',        label: '재료비·폐기물 과다' },
 ]
 
 interface Props {
