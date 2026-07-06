@@ -15,6 +15,24 @@ interface Props {
   onReset: () => void
 }
 
+// "근거" 텍스트 속 "사례 2, 3" 같은 인용을 실제 참고자료 카드로 이동하는
+// 링크로 바꿔준다 — 인용이 텍스트로만 있고 눌러볼 수 없으면 신뢰도가 떨어짐
+function renderRationale(text: string) {
+  const parts = text.split(/(사례\s*[\d,·및\s]*\d)/g)
+  return parts.map((part, idx) => {
+    const m = part.match(/^사례\s*([\d,·및\s]*\d)$/)
+    const firstNum = m ? m[1].match(/\d+/)?.[0] : null
+    if (firstNum) {
+      return (
+        <a key={idx} href={`#rag-source-${firstNum}`} className="text-brand underline font-medium">
+          {part}
+        </a>
+      )
+    }
+    return <span key={idx}>{part}</span>
+  })
+}
+
 const GAP_ASSESS_COLOR = (assessment: string | undefined) => {
   if (!assessment) return 'text-gray-600 bg-gray-50'
   if (assessment.includes('개선 필요') || assessment.includes('열위')) return 'text-red-600 bg-red-50'
@@ -125,7 +143,7 @@ export default function ResultDashboard({ result, onReset }: Props) {
                   </div>
                 </div>
                 <div className="mt-3 pt-3 border-t border-gray-200 text-xs text-gray-500">
-                  {p.rationale}
+                  {renderRationale(p.rationale)}
                 </div>
               </div>
             ))}
@@ -189,11 +207,17 @@ export default function ResultDashboard({ result, onReset }: Props) {
       {rag_sources?.length > 0 && (
         <div className="card">
           <h3 className="section-title">🔗 AI 분석 참고 자료</h3>
+          <p className="text-xs text-gray-500 mb-3">
+            위 우선순위의 &quot;근거&quot;에 나오는 &quot;사례 N&quot;은 아래 번호와 정확히 대응합니다.
+          </p>
           <div className="space-y-2">
             {rag_sources.map((s, i) => (
-              <div key={i} className="flex items-center gap-3 text-sm">
+              <div key={i} id={`rag-source-${i + 1}`} className="flex items-center gap-3 text-sm scroll-mt-20">
+                <span className="text-xs bg-navy text-white px-2 py-0.5 rounded-full min-w-fit font-bold">
+                  사례 {i + 1}
+                </span>
                 <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full min-w-fit">
-                  {s.relevance_score != null ? `관련도 ${s.relevance_score.toFixed(1)}` : `#${i+1}`}
+                  {s.relevance_score != null ? `관련도 ${s.relevance_score.toFixed(1)}` : '순위 미평가'}
                 </span>
                 {s.case_type && (
                   <span className={`text-xs px-2 py-0.5 rounded-full min-w-fit font-medium ${
